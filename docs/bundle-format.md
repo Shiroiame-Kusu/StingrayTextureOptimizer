@@ -125,9 +125,32 @@ since the prefix length varies.
 [ Stingray texture header ][ "DDS " + DDS_HEADER (128) ][ DDS_HEADER_DXT10 (20) ]
 ```
 
-In observed samples the prefix is 192 bytes, mostly zeros with `0xFFFFFFFF` at
-offset 8, giving a 340-byte payload. The pixel data itself lives in
-`.gpu_resources` at the entry's GPU offset, **not** after the header.
+In observed samples the prefix is 192 bytes, giving a 340-byte payload. The
+pixel data itself lives in `.gpu_resources` at the entry's GPU offset, **not**
+after the header.
+
+### Streaming: the field at prefix offset 8
+
+The u32 at offset 8 of the Stingray prefix is the **index of the first mip level
+held resident in `.gpu_resources`**:
+
+| Value | Meaning |
+| --- | --- |
+| `0xFFFFFFFF` | Nothing is streamed. The whole mip chain is in `.gpu_resources` and resident. |
+| `N` | Levels `0..N-1` live in `.stream` and load on demand; levels `N..` are always resident. |
+
+Confirmed by reconstructing each level's size from the DDS dimensions, format and
+mip count, then finding which suffix of the chain sums to the entry's `gpuSize`:
+across two real bundles that suffix's start index matched this field for every
+texture (29 of 29, and 1 of 1). The only exceptions are 4×4 textures, where the
+entire chain is 48 bytes and the question is degenerate.
+
+This matters for memory rather than disk. A 4096×4096 BC7 texture with a full
+13-level chain is 21.3 MiB; if the field says `0xFFFFFFFF`, all of it is resident
+at once. Mod tooling appears to write `0xFFFFFFFF` routinely, which defeats the
+streaming the engine would otherwise do — in one real mod, every texture above
+512 px was fully resident, and only six small untouched entries still had a
+streamed tail.
 
 Fields this tool rewrites, all in place so the payload length never changes:
 
