@@ -36,7 +36,11 @@ jobs:
         include:
           - { os: ubuntu-latest,  rid: linux-x64, archive: tar }
           - { os: windows-latest, rid: win-x64,   archive: zip }
-          - { os: macos-13,       rid: osx-x64,   archive: tar }
+          # Both macOS targets build on the Apple Silicon runner: GitHub is
+          # retiring the Intel macos-13 image and jobs queued on it can hang
+          # indefinitely. AOT cross-compiles arm64 -> x64 fine, since both use
+          # the same clang and macOS SDK.
+          - { os: macos-latest,   rid: osx-x64,   archive: tar }
           - { os: macos-latest,   rid: osx-arm64, archive: tar }
     runs-on: ${{ matrix.os }}
 
