@@ -1,0 +1,130 @@
+<!--
+  SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="clr-namespace:Stingray.Gui.ViewModels"
+        x:Class="Stingray.Gui.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Stingray Texture Optimizer"
+        Width="1180" Height="720" MinWidth="900" MinHeight="520">
+
+  <DockPanel Margin="12">
+
+    <Border DockPanel.Dock="Top" Padding="0,0,0,10">
+      <StackPanel Orientation="Horizontal" Spacing="10">
+        <Button Content="Open bundle…" Click="OnOpenClicked" IsEnabled="{Binding !IsBusy}" />
+        <TextBlock VerticalAlignment="Center" Opacity="0.75"
+                   Text="{Binding BundlePath, FallbackValue='no bundle loaded'}" />
+      </StackPanel>
+    </Border>
+
+    <Border DockPanel.Dock="Top" Padding="0,0,0,10">
+      <StackPanel Orientation="Horizontal" Spacing="16">
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="Strategy" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding Strategies}" SelectedItem="{Binding Strategy}"
+                    MinWidth="150" IsEnabled="{Binding !IsBusy}" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="Encoder quality" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding Qualities}" SelectedItem="{Binding Quality}"
+                    MinWidth="110" IsEnabled="{Binding !IsBusy}" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="Threads" VerticalAlignment="Center" />
+          <NumericUpDown Value="{Binding ThreadCount}" Minimum="1" Maximum="{Binding MaxThreads}"
+                         Increment="1" FormatString="0" MinWidth="110" IsEnabled="{Binding !IsBusy}" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="6">
+          <TextBlock Text="Max size" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding SizeCaps}" SelectedItem="{Binding SizeCap}"
+                    MinWidth="130" IsEnabled="{Binding !IsBusy}"
+                    ToolTip.Tip="Halves oversized textures. This is the only lossy option; each affected texture reports its measured detail cost." />
+        </StackPanel>
+        <CheckBox Content="Collapse solid-colour textures"
+                  IsChecked="{Binding CollapseSolidColours}" IsEnabled="{Binding !IsBusy}"
+                  ToolTip.Tip="A texture whose every pixel is identical is rewritten at 16x16, which is visually lossless." />
+        <CheckBox Content="Share duplicate payloads"
+                  IsChecked="{Binding Deduplicate}" IsEnabled="{Binding !IsBusy}"
+                  ToolTip.Tip="Byte-identical payloads are stored once and referenced by every entry that uses them. Completely lossless." />
+      </StackPanel>
+    </Border>
+
+    <Border DockPanel.Dock="Bottom" Padding="0,10,0,0">
+      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
+        <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Status}" TextWrapping="Wrap"
+                   VerticalAlignment="Center" Margin="0,0,12,0" />
+        <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="12">
+          <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
+                     Text="{Binding SavingSummary}" />
+          <Button Content="Optimize" Click="OnOptimizeClicked"
+                  IsEnabled="{Binding CanOptimize}" Classes="accent" MinWidth="110" />
+        </StackPanel>
+        <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0" Spacing="4"
+                    IsVisible="{Binding IsBusy}">
+          <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4" />
+          <TextBlock Text="{Binding ProgressText}" Opacity="0.7" FontSize="11" />
+        </StackPanel>
+        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0"
+                   Opacity="0.5" FontSize="11" TextWrapping="Wrap"
+                   Text="Stingray Texture Optimizer, Copyright (C) 2026 Shiroiame-Kusu. Free software with ABSOLUTELY NO WARRANTY, redistributable under the GNU GPL v3 or later. See LICENSE." />
+      </Grid>
+    </Border>
+
+    <Grid RowDefinitions="*,Auto,Auto,Auto">
+      <DataGrid Grid.Row="0" x:CompileBindings="False"
+                ItemsSource="{Binding Textures}"
+                AutoGenerateColumns="False"
+                GridLinesVisibility="Horizontal" CanUserResizeColumns="True"
+                HeadersVisibility="Column">
+        <DataGrid.Columns>
+          <DataGridCheckBoxColumn Header="" Binding="{Binding Include}" Width="40" />
+          <DataGridTextColumn Header="Texture" Binding="{Binding Name}" IsReadOnly="True" Width="150" />
+          <DataGridTextColumn Header="Dimensions" Binding="{Binding Dimensions}" IsReadOnly="True" Width="165" />
+          <DataGridTextColumn Header="From" Binding="{Binding SourceFormat}" IsReadOnly="True" Width="140" />
+          <DataGridTemplateColumn Header="To" Width="130">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate>
+                <TextBlock Text="{Binding TargetFormat}" VerticalAlignment="Center" Margin="4,0" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+            <DataGridTemplateColumn.CellEditingTemplate>
+              <DataTemplate>
+                <ComboBox ItemsSource="{Binding AvailableFormats}"
+                          SelectedItem="{Binding TargetFormat}" />
+              </DataTemplate>
+            </DataGridTemplateColumn.CellEditingTemplate>
+          </DataGridTemplateColumn>
+          <DataGridTextColumn Header="Size" Binding="{Binding CurrentSizeText}" IsReadOnly="True" Width="90" />
+          <DataGridTextColumn Header="New" Binding="{Binding PredictedSizeText}" IsReadOnly="True" Width="90" />
+          <DataGridTextColumn Header="Saved" Binding="{Binding SavingText}" IsReadOnly="True" Width="90" />
+          <DataGridTextColumn Header="Content" Binding="{Binding Content}" IsReadOnly="True" Width="*" />
+          <DataGridTextColumn Header="Resize cost" Binding="{Binding ResizeCost}" IsReadOnly="True" Width="230" />
+        </DataGrid.Columns>
+      </DataGrid>
+
+      <Border Grid.Row="1" Margin="0,10,0,4" Padding="10,7" CornerRadius="4"
+              Background="#20808080" IsVisible="{Binding ShowDuplicateInfo}">
+        <TextBlock Text="{Binding DuplicateSummary}" TextWrapping="Wrap" FontWeight="SemiBold" />
+      </Border>
+      <TextBlock Grid.Row="2" Margin="0,10,0,4" FontWeight="SemiBold" Text="Skipped"
+                 IsVisible="{Binding HasSkipped}" />
+      <ItemsControl Grid.Row="3" ItemsSource="{Binding Skipped}" MaxHeight="110"
+                    x:CompileBindings="False">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap">
+              <Run Text="{Binding Name}" />
+              <Run Text=" — " />
+              <Run Text="{Binding Description}" />
+              <Run Text=" — " />
+              <Run Text="{Binding Reason}" />
+            </TextBlock>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Grid>
+  </DockPanel>
+</Window>

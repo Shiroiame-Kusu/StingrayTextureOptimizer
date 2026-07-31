@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <AssemblyName>stingray-tex</AssemblyName>
+    <RootNamespace>Stingray.Cli</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Stingray.Core/Stingray.Core.csproj" />
+  </ItemGroup>
+</Project>

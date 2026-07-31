@@ -1,0 +1,264 @@
+// SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+using System.Collections.ObjectModel;
+using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Stingray.Core.Format;
+using Stingray.Core.Optimization;
+using Stingray.Core.Textures;
+
+namespace Stingray.Gui.ViewModels;
+
+public sealed partial class MainWindowViewModel : ObservableObject
+{
+    private Bundle? _bundle;
+
+    public ObservableCollection<TextureItemViewModel> Textures { get; } = [];
+    public ObservableCollection<SkippedTexture> Skipped { get; } = [];
+
+    public IReadOnlyList<OptimizationStrategy> Strategies { get; } = Enum.GetValues<OptimizationStrategy>();
+    public IReadOnlyList<EncodeQuality> Qualities { get; } = Enum.GetValues<EncodeQuality>();
+
+    public IReadOnlyList<SizeCap> SizeCaps { get; } =
+    [
+        new(0, "Keep original"),
+        new(4096, "4096 max"),
+        new(2048, "2048 max"),
+        new(1024, "1024 max"),
+        new(512, "512 max"),
+    ];
+
+    [ObservableProperty] private string? _bundlePath;
+    [ObservableProperty] private string _status = "Open a bundle to begin.";
+    [ObservableProperty] private bool _isBusy;
+    [ObservableProperty] private double _progress;
+    [ObservableProperty] private string _progressText = "";
+    [ObservableProperty] private bool _collapseSolidColours = true;
+    [ObservableProperty] private bool _deduplicate = true;
+
+    /// <summary>
+    /// Resizing is the only genuinely lossy option here, so it is off by default
+    /// and every affected texture reports its measured cost before you commit.
+    /// </summary>
+    [ObservableProperty] private SizeCap _sizeCap = new(0, "Keep original");
+    [ObservableProperty] private OptimizationStrategy _strategy = OptimizationStrategy.Balanced;
+    [ObservableProperty] private EncodeQuality _quality = EncodeQuality.Balanced;
+
+    /// <summary>
+    /// Defaults to leaving four cores free. Saturating every core during a long
+    /// encode makes the desktop unusable.
+    /// </summary>
+    [ObservableProperty] private int _threadCount = Math.Max(1, Environment.ProcessorCount - 4);
+
+    public int MaxThreads => Environment.ProcessorCount;
+
+    public long CurrentSize { get; private set; }
+    public long PredictedSize { get; private set; }
+    public long Saving => CurrentSize - PredictedSize;
+    public double SavingFraction => CurrentSize == 0 ? 0 : (double)Saving / CurrentSize;
+
+    public bool HasPlan => Textures.Count > 0;
+    public bool HasSkipped => Skipped.Count > 0;
+
+    public int DuplicateEntryCount { get; private set; }
+    public long RedundantBytes { get; private set; }
+    public bool HasDuplicates => Deduplicate && DuplicateEntryCount > 0;
+    public bool ShowDuplicateInfo => DuplicateEntryCount > 0;
+
+    public string DuplicateSummary => DuplicateEntryCount == 0
+        ? string.Empty
+        : $"{DuplicateEntryCount} entries repeat a payload another entry already has, "
+        + $"wasting {Format.Bytes(RedundantBytes)}. These are stored once and shared.";
+
+    /// <summary>
+    /// Deduplication alone can be a large win even when every texture is already
+    /// compressed, so an empty texture list does not mean there is nothing to do.
+    /// </summary>
+    public bool CanOptimize =>
+        !IsBusy && (Textures.Any(t => t.Include) || HasDuplicates);
+
+    public string SavingSummary => CurrentSize == 0
+        ? string.Empty
+        : $"{Format.Bytes(CurrentSize)} → {Format.Bytes(PredictedSize)}  (−{SavingFraction:P0})";
+
+    public async Task LoadAsync(string path)
+    {
+        IsBusy = true;
+        Status = $"Analysing {Path.GetFileName(path)}...";
+        Textures.Clear();
+        Skipped.Clear();
+
+        try
+        {
+            var cap = SizeCap.Value;
+            var (plan, bundle) = await Task.Run(() =>
+            {
+                var loaded = Bundle.Load(path);
+                if (!loaded.HasGpuResources)
+                    throw new FileNotFoundException(
+                        $"No .gpu_resources companion found next to {Path.GetFileName(path)}.");
+
+                using var gpu = GpuResourceFile.Open(loaded.GpuResourcePath);
+                return (OptimizationPlan.Build(loaded, gpu, Strategy, CollapseSolidColours,
+                                               maxDimension: cap), loaded);
+            });
+
+            _bundle = bundle;
+            BundlePath = path;
+            CurrentSize = plan.CurrentGpuSize;
+
+            foreach (var item in plan.Textures)
+                Textures.Add(new TextureItemViewModel(item, RecalculateTotals));
+            foreach (var skip in plan.Skipped)
+                Skipped.Add(skip);
+
+            _plan = plan;
+            plan.Deduplicate = Deduplicate;
+            DuplicateEntryCount = plan.DuplicateEntryCount;
+            RedundantBytes = plan.RedundantBytes;
+            RecalculateTotals();
+
+            Status = (Textures.Count, DuplicateEntryCount) switch
+            {
+                (0, 0) => "Nothing to optimise: every texture is already efficient.",
+                (0, _) => $"Every texture is already compressed, but {DuplicateEntryCount} "
+                        + "duplicate payloads can be shared.",
+                (_, 0) => $"{Textures.Count} texture(s) can be shrunk, {Skipped.Count} skipped.",
+                _ => $"{Textures.Count} texture(s) can be shrunk and {DuplicateEntryCount} "
+                   + $"duplicate payloads shared, {Skipped.Count} skipped.",
+            };
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
+        {
+            Status = $"Could not open: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            OnPropertyChanged(nameof(HasPlan));
+            OnPropertyChanged(nameof(CanOptimize));
+        }
+    }
+
+    private OptimizationPlan? _plan;
+
+    [RelayCommand]
+    private async Task OptimizeAsync()
+    {
+        if (_plan is null || _bundle is null) return;
+
+        IsBusy = true;
+        Progress = 0;
+        var backupDirectory = Path.Combine(
+            Path.GetDirectoryName(_bundle.Path) ?? ".", "backup");
+
+        try
+        {
+            var result = await Task.Run(() =>
+            {
+                BundleOptimizer.CreateBackup(_bundle, backupDirectory);
+
+                using var gpu = GpuResourceFile.Open(_bundle.GpuResourcePath);
+                var reporter = new Progress<ApplyProgress>(p =>
+                {
+                    Progress = p.Total == 0 ? 0 : 100.0 * p.Completed / p.Total;
+                    ProgressText = $"{p.Stage}: {p.Detail}";
+                });
+
+                return BundleOptimizer.Apply(
+                    _plan, gpu, _bundle.Path, _bundle.GpuResourcePath,
+                    new EncodeOptions { Quality = Quality, ThreadCount = ThreadCount },
+                    reporter, Deduplicate);
+            });
+
+            var report = await Task.Run(() => BundleVerifier.Verify(
+                _bundle.Path, Path.Combine(backupDirectory, Path.GetFileName(_bundle.Path))));
+
+            Status = report.Passed
+                ? $"Done: {Format.Bytes(result.OriginalGpuSize)} → {Format.Bytes(result.NewGpuSize)} "
+                + $"(saved {Format.Bytes(result.Saved)}) in {result.Elapsed.TotalSeconds:F1}s. "
+                + $"Verified; originals in {Path.GetFileName(backupDirectory)}/."
+                : $"Written, but verification found {report.Issues.Count} issue(s): "
+                + string.Join("; ", report.Issues.Take(3).Select(i => i.Detail));
+
+            // The bundle on disk has changed, so the plan no longer describes it.
+            Textures.Clear();
+            Skipped.Clear();
+            DuplicateEntryCount = 0;
+            RedundantBytes = 0;
+            _plan = null;
+            _bundle = null;
+            RecalculateTotals();
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
+        {
+            Status = $"Failed: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+            ProgressText = "";
+            OnPropertyChanged(nameof(HasPlan));
+            OnPropertyChanged(nameof(CanOptimize));
+        }
+    }
+
+    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(CanOptimize));
+
+    public void RecalculateTotals()
+    {
+        PredictedSize = _plan?.PredictedGpuSize ?? CurrentSize;
+        OnPropertyChanged(nameof(PredictedSize));
+        OnPropertyChanged(nameof(Saving));
+        OnPropertyChanged(nameof(SavingFraction));
+        OnPropertyChanged(nameof(SavingSummary));
+        OnPropertyChanged(nameof(HasPlan));
+        OnPropertyChanged(nameof(HasSkipped));
+        OnPropertyChanged(nameof(HasDuplicates));
+        OnPropertyChanged(nameof(ShowDuplicateInfo));
+        OnPropertyChanged(nameof(DuplicateSummary));
+        OnPropertyChanged(nameof(DuplicateEntryCount));
+        OnPropertyChanged(nameof(CanOptimize));
+    }
+
+    /// <summary>Re-runs analysis when the strategy changes, so the grid stays in sync.</summary>
+    partial void OnStrategyChanged(OptimizationStrategy value)
+    {
+        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
+    }
+
+    partial void OnCollapseSolidColoursChanged(bool value)
+    {
+        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
+    }
+
+    partial void OnDeduplicateChanged(bool value)
+    {
+        if (_plan is not null) _plan.Deduplicate = value;
+        RecalculateTotals();
+    }
+
+    partial void OnSizeCapChanged(SizeCap value)
+    {
+        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
+    }
+}
+
+/// <summary>A maximum-dimension choice, with the label shown in the dropdown.</summary>
+public sealed record SizeCap(int Value, string Label)
+{
+    public override string ToString() => Label;
+}
+
+internal static class Format
+{
+    public static string Bytes(long bytes)
+    {
+        string[] units = ["B", "KiB", "MiB", "GiB"];
+        double value = bytes;
+        var unit = 0;
+        while (Math.Abs(value) >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; }
+        return unit == 0 ? $"{bytes} B" : $"{value:F1} {units[unit]}";
+    }
+}

@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Stingray.Cli/Stingray.Cli.csproj" />
+    <Project Path="src/Stingray.Core/Stingray.Core.csproj" />
+    <Project Path="src/Stingray.Gui/Stingray.Gui.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Stingray.Core.Tests/Stingray.Core.Tests.csproj" />
+  </Folder>
+</Solution>

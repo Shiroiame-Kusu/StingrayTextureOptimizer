@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <AssemblyName>stingray-tex-gui</AssemblyName>
+    <RootNamespace>Stingray.Gui</RootNamespace>
+    <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    <!--
+      Pinned to the newest version that every Avalonia package shares:
+      Avalonia.Controls.DataGrid's 11.x line stops at 11.3.13, and mixing it with
+      a newer core produces an inconsistent stack. Avalonia 12 is deliberately
+      avoided; its restore hangs on some setups.
+    -->
+    <AvaloniaVersion>11.3.13</AvaloniaVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="Avalonia.Controls.DataGrid" Version="$(AvaloniaVersion)" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <!--
+      Avalonia.X11 pulls Tmds.DBus.Protocol 0.21.2, which is affected by
+      GHSA-xrw6-gwf8-vvr9 (high: D-Bus signal spoofing / fd exhaustion).
+      0.21.3 is the patch release for that line, so pin it directly to override
+      the transitive reference. Revisit when Avalonia ships a newer X11 backend.
+    -->
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.21.3" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../Stingray.Core/Stingray.Core.csproj" />
+  </ItemGroup>
+</Project>

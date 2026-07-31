@@ -1,0 +1,18 @@
+<!--
+  SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
+  SPDX-License-Identifier: GPL-3.0-or-later
+-->
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="Stingray.Gui.ConfirmWindow"
+        Title="Confirm" Width="480" SizeToContent="Height"
+        WindowStartupLocation="CenterOwner" CanResize="False">
+  <StackPanel Margin="20" Spacing="14">
+    <TextBlock Name="HeadingText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
+    <TextBlock Name="BodyText" TextWrapping="Wrap" Opacity="0.85" />
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="Cancel" Click="OnCancel" MinWidth="90" />
+      <Button Content="Rewrite" Click="OnConfirm" MinWidth="90" Classes="accent" />
+    </StackPanel>
+  </StackPanel>
+</Window>
