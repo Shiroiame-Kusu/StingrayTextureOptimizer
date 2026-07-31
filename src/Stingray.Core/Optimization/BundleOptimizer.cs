@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 using System.Diagnostics;
+using Stingray.Core.Dds;
 using Stingray.Core.Format;
 using Stingray.Core.Textures;
 
@@ -67,6 +68,17 @@ public static class BundleOptimizer
 
             var entry = item.Texture.Entry;
             var surface = sourceGpu.Read(entry.GpuOffset, entry.GpuSize);
+
+            // Dropping mip levels is a slice, not an encode: skip past the levels
+            // being discarded and keep the rest byte for byte.
+            if (item.IsMipDrop)
+            {
+                var chain = item.Texture.MipChain;
+                var skip = chain.Take(item.MipLevelsToDrop).Sum();
+                encoded[entry.FileId] = surface.AsSpan((int)skip).ToArray();
+                continue;
+            }
+
             var cacheKey = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(surface))
                          + $":{item.TargetFormat}:{item.TargetWidth}x{item.TargetHeight}";
 
@@ -154,9 +166,18 @@ public static class BundleOptimizer
         {
             var entry = item.Texture.Entry;
             var payload = image.AsSpan((int)entry.Offset, (int)entry.Size);
+            // For a sliced chain the DDS "linear size" describes the new level 0,
+            // not the whole payload, and the level count shrinks with it.
+            var mips = item.IsMipDrop
+                ? item.Texture.MipMapCount - item.MipLevelsToDrop
+                : (int?)null;
+            var linearSize = item.IsMipDrop
+                ? item.TargetFormat.SurfaceSize(item.TargetWidth, item.TargetHeight)
+                : newOffsets[entry.FileId].Size;
+
             item.Texture.Header.Patch(
                 payload, item.TargetWidth, item.TargetHeight, item.TargetFormat,
-                newOffsets[entry.FileId].Size);
+                linearSize, mips);
         }
 
         // 4. Commit both files.

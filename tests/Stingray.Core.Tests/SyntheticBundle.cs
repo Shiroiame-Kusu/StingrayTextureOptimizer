@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 
 using System.Buffers.Binary;
+using Stingray.Core.Dds;
 using Stingray.Core.Format;
 
 namespace Stingray.Core.Tests;
@@ -66,6 +67,22 @@ internal sealed class SyntheticBundle : IDisposable
         var stream = new byte[streamSize];
         for (var i = 0; i < stream.Length; i++) stream[i] = (byte)(i * 7);
         _entries.Add((StingrayTypeIds.Texture, cpu, tail, stream));
+        return this;
+    }
+
+    /// <summary>
+    /// Adds an already-compressed texture carrying a full mip chain, the shape
+    /// that mip dropping operates on.
+    /// </summary>
+    public SyntheticBundle AddMippedTexture(int width, int height, DxgiFormat format, int mipCount)
+    {
+        var chain = format.MipChain(width, height, mipCount);
+        var gpu = new byte[chain.Sum()];
+        for (var i = 0; i < gpu.Length; i++) gpu[i] = (byte)(i * 31 + 7);
+
+        var cpu = BuildTextureCpuPayload(width, height, mipCount, (uint)format,
+                                         (int)format.SurfaceSize(width, height));
+        _entries.Add((StingrayTypeIds.Texture, cpu, gpu, []));
         return this;
     }
 
@@ -163,6 +180,12 @@ internal sealed class SyntheticBundle : IDisposable
                                                  int? linearSize = null)
     {
         var payload = new byte[CpuPayloadSize];
+
+        // Offset 8 of the Stingray prefix is the first resident mip level;
+        // 0xFFFFFFFF means nothing is streamed, which is what real non-streamed
+        // textures carry.
+        BinaryPrimitives.WriteUInt32LittleEndian(payload.AsSpan(8), 0xFFFF_FFFF);
+
         var dds = payload.AsSpan(StingrayPrefix);
 
         BinaryPrimitives.WriteUInt32LittleEndian(dds, 0x2053_4444);            // "DDS "

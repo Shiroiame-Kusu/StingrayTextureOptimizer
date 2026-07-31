@@ -108,5 +108,11 @@ public sealed class FormatRecommendation
     /// <summary>True when the result is provably identical to the source.</summary>
     public required bool IsLossless { get; init; }
 
+    /// <summary>
+    /// Top mip levels to discard instead of re-encoding. Slicing a chain keeps
+    /// the author's own pixels for every level that survives.
+    /// </summary>
+    public int MipLevelsToDrop { get; init; }
+
     public long PredictedSize => Format.SurfaceSize(Width, Height);
 }

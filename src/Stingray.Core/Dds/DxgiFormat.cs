@@ -7,6 +7,8 @@ namespace Stingray.Core.Dds;
 public enum DxgiFormat : uint
 {
     Unknown = 0,
+    R8G8Unorm = 49,
+    R8Unorm = 61,
     R8G8B8A8Unorm = 28,
     R8G8B8A8UnormSrgb = 29,
     Bc1Unorm = 71,
@@ -60,8 +62,14 @@ public static class DxgiFormatInfo
     {
         DxgiFormat.R8G8B8A8Unorm or DxgiFormat.R8G8B8A8UnormSrgb
             or DxgiFormat.B8G8R8A8Unorm or DxgiFormat.B8G8R8A8UnormSrgb => 4,
+        DxgiFormat.R8G8Unorm => 2,
+        DxgiFormat.R8Unorm => 1,
         _ => 0,
     };
+
+    /// <summary>Whether a surface size can be computed for this format at all.</summary>
+    public static bool IsSizable(this DxgiFormat format) =>
+        format.IsBlockCompressed() || format.BytesPerPixel() > 0;
 
     /// <summary>True for the 32-bit straight-channel layouts this tool can analyse.</summary>
     public static bool IsUncompressedRgba(this DxgiFormat format) => format.BytesPerPixel() == 4;
@@ -85,6 +93,31 @@ public static class DxgiFormatInfo
         return (long)width * height * bpp;
     }
 
+    /// <summary>Byte size of every level of a mip chain, largest first.</summary>
+    public static long[] MipChain(this DxgiFormat format, int width, int height, int mipCount)
+    {
+        var levels = new long[Math.Max(1, mipCount)];
+        for (var i = 0; i < levels.Length; i++)
+            levels[i] = format.SurfaceSize(Math.Max(1, width >> i), Math.Max(1, height >> i));
+        return levels;
+    }
+
+    /// <summary>
+    /// How many top levels to drop so the largest remaining one fits
+    /// <paramref name="maxDimension"/>, never dropping the whole chain.
+    /// </summary>
+    public static int LevelsToDrop(int width, int height, int mipCount, int maxDimension)
+    {
+        if (maxDimension <= 0 || mipCount <= 1) return 0;
+
+        var drop = 0;
+        while (drop < mipCount - 1
+               && Math.Max(width >> drop, height >> drop) > maxDimension)
+            drop++;
+
+        return drop;
+    }
+
     public static string DisplayName(this DxgiFormat format) => format switch
     {
         DxgiFormat.R8G8B8A8Unorm => "R8G8B8A8_UNORM",
@@ -98,6 +131,8 @@ public static class DxgiFormatInfo
         DxgiFormat.Bc5Unorm => "BC5_UNORM",
         DxgiFormat.Bc7Unorm => "BC7_UNORM",
         DxgiFormat.Bc7UnormSrgb => "BC7_UNORM_SRGB",
+        DxgiFormat.R8Unorm => "R8_UNORM",
+        DxgiFormat.R8G8Unorm => "R8G8_UNORM",
         _ => $"DXGI_{(uint)format}",
     };
 }

@@ -102,12 +102,20 @@ public static class BundleVerifier
 
             if (!texture.Header.HasDx10Header) continue;
 
+            // A format this build cannot size is not evidence of a problem: the
+            // optimiser skips those too. Reporting it as an error would fail
+            // verification on bundles that were never touched.
+            if (!texture.SourceFormat.IsSizable()) continue;
+
             // Streamed textures keep their mip chain in the .stream file and leave
             // only a resident tail in gpu_resources, so the GPU size legitimately
             // does not describe the full surface. Same for any mipmapped texture.
             if (entry.StreamSize > 0 || texture.Header.MipMapCount > 1) continue;
 
-            var expected = texture.SourceFormat.SurfaceSize(texture.Width, texture.Height);
+            var mips = Math.Max(1, texture.Header.MipMapCount);
+            var expected = mips > 1
+                ? texture.SourceFormat.MipChain(texture.Width, texture.Height, mips).Sum()
+                : texture.SourceFormat.SurfaceSize(texture.Width, texture.Height);
             if (expected != entry.GpuSize)
                 issues.Add(new VerificationIssue("texture-size",
                     $"{entry.Name}: header describes {texture.Width}x{texture.Height} "
@@ -117,9 +125,12 @@ public static class BundleVerifier
             // uncompressed ones store a per-row pitch, which is not the payload size.
             if (!texture.SourceFormat.IsBlockCompressed()) continue;
 
-            if (texture.Header.PitchOrLinearSize != entry.GpuSize)
+            // For a mip chain the linear size describes level 0, not the payload.
+            var levelZero = texture.SourceFormat.SurfaceSize(texture.Width, texture.Height);
+            if (texture.Header.PitchOrLinearSize != levelZero)
                 issues.Add(new VerificationIssue("texture-linearsize",
-                    $"{entry.Name}: DDS linear size {texture.Header.PitchOrLinearSize} != table size {entry.GpuSize}"));
+                    $"{entry.Name}: DDS linear size {texture.Header.PitchOrLinearSize} "
+                  + $"!= level 0 size {levelZero}"));
 
             if ((texture.Header.Flags & DdsHeader.FlagLinearSize) == 0)
                 issues.Add(new VerificationIssue("texture-flags",

@@ -21,8 +21,26 @@ public sealed class TexturePlanItem
     public int TargetWidth { get; set; }
     public int TargetHeight { get; set; }
 
+    /// <summary>
+    /// Top mip levels to discard. Non-zero means the payload is sliced rather
+    /// than re-encoded: the levels that remain are the author's own data, so
+    /// nothing is recompressed and no generation loss is introduced.
+    /// </summary>
+    public int MipLevelsToDrop { get; set; }
+
+    public bool IsMipDrop => MipLevelsToDrop > 0;
+
     public long CurrentSize => Texture.GpuSize;
-    public long PredictedSize => Include ? TargetFormat.SurfaceSize(TargetWidth, TargetHeight) : CurrentSize;
+
+    public long PredictedSize
+    {
+        get
+        {
+            if (!Include) return CurrentSize;
+            if (!IsMipDrop) return TargetFormat.SurfaceSize(TargetWidth, TargetHeight);
+            return Texture.MipChain.Skip(MipLevelsToDrop).Sum();
+        }
+    }
     public long Saving => CurrentSize - PredictedSize;
 
     /// <summary>True while the item still matches what the analyser suggested.</summary>
@@ -36,6 +54,7 @@ public sealed class TexturePlanItem
         TargetFormat = Recommendation.Format;
         TargetWidth = Recommendation.Width;
         TargetHeight = Recommendation.Height;
+        MipLevelsToDrop = Recommendation.MipLevelsToDrop;
         Include = true;
     }
 }
@@ -221,7 +240,9 @@ public sealed class OptimizationPlan
             var key = hashes.TryGetValue(entry.FileId, out var hash) ? hash : entry.Name;
             if (!analysisCache.TryGetValue(key, out var analysis))
             {
-                var surface = gpu.Read(entry.GpuOffset, entry.GpuSize);
+                // Only level 0 is analysed; the rest of the chain is derived from it.
+                var levelZero = (uint)texture.SourceFormat.SurfaceSize(texture.Width, texture.Height);
+                var surface = gpu.Read(entry.GpuOffset, Math.Min(levelZero, entry.GpuSize));
                 var rgba = TextureDecoder.ToRgba(surface, texture.Width, texture.Height, texture.SourceFormat);
                 analysis = TextureAnalyzer.Analyze(rgba, texture.Width, texture.Height);
                 analysisCache[key] = analysis;
@@ -229,7 +250,7 @@ public sealed class OptimizationPlan
 
             var recommendation = TextureAnalyzer.Recommend(
                 analysis, texture.Width, texture.Height, strategy, collapseSolidColours,
-                maxDimension, texture.SourceFormat);
+                maxDimension, texture.SourceFormat, texture.MipMapCount);
 
             var item = new TexturePlanItem
             {

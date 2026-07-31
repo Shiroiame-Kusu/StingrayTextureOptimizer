@@ -89,8 +89,38 @@ public static class TextureAnalyzer
         OptimizationStrategy strategy = OptimizationStrategy.Balanced,
         bool collapseSolidColours = true,
         int maxDimension = 0,
-        DxgiFormat sourceFormat = DxgiFormat.Unknown)
+        DxgiFormat sourceFormat = DxgiFormat.Unknown,
+        int mipCount = 1)
     {
+        // A texture that carries a mip chain can be shrunk by discarding its top
+        // levels: the ones that remain are the author's own pixels, already
+        // encoded, so nothing is recompressed and nothing is resampled. That is
+        // strictly better than re-encoding a downscale, and far quicker.
+        if (mipCount > 1 && sourceFormat.IsBlockCompressed())
+        {
+            var drop = DxgiFormatInfo.LevelsToDrop(width, height, mipCount, maxDimension);
+            if (drop == 0)
+                return new FormatRecommendation
+                {
+                    Format = sourceFormat,
+                    Width = width,
+                    Height = height,
+                    IsLossless = true,
+                    Rationale = $"already compressed with {mipCount} mip levels; left as is",
+                };
+
+            return new FormatRecommendation
+            {
+                Format = sourceFormat,
+                Width = Math.Max(1, width >> drop),
+                Height = Math.Max(1, height >> drop),
+                MipLevelsToDrop = drop,
+                IsLossless = false,
+                Rationale = $"dropping the top {drop} mip level(s); the rest is kept "
+                          + "exactly as authored, with no re-encoding",
+            };
+        }
+
         // Collapse solid colours first, whatever they are stored as. Real bundles
         // contain 4096x4096 BC7 surfaces holding a single colour; skipping them
         // just because they are "already compressed" leaves 16 MiB on the table.

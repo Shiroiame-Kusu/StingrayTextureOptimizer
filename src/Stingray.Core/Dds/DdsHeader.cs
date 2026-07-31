@@ -82,7 +82,8 @@ public sealed class DdsHeader
     /// Rewrites dimensions, format and size fields in place. The payload span
     /// must start at the same position as the one passed to <see cref="TryRead"/>.
     /// </summary>
-    public void Patch(Span<byte> payload, int width, int height, DxgiFormat format, long surfaceSize)
+    public void Patch(Span<byte> payload, int width, int height, DxgiFormat format,
+                      long surfaceSize, int? mipMapCount = null)
     {
         if (!HasDx10Header)
             throw new NotSupportedException("Only DX10-style DDS headers can be rewritten.");
@@ -102,6 +103,12 @@ public sealed class DdsHeader
         BinaryPrimitives.WriteUInt32LittleEndian(dds[0x10..], (uint)width);
         BinaryPrimitives.WriteUInt32LittleEndian(dds[0x14..], (uint)surfaceSize);
         BinaryPrimitives.WriteUInt32LittleEndian(dds[CoreHeaderLength..], (uint)format);
+
+        if (mipMapCount is { } mips)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(dds[0x1C..], (uint)mips);
+            MipMapCount = mips;
+        }
 
         Flags = flags;
         Width = width;
