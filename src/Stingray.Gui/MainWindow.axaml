@@ -37,7 +37,7 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="How many encodings the compressor tries before settling.&#x0a;This never changes the output size, only quality and time.&#x0a;Measured on a 4096x4096 texture: BC7 spans just 0.6 dB from Fast to Best while taking 3x longer, so Best is rarely worth it.&#x0a;BC1 is different: Fast costs about 3 dB against Balanced, which is visible. Balanced suits both.">
+                    ToolTip.Tip="How hard the chosen encoder tries. Relative to that encoder, not an absolute quality target: Compressonator at Balanced beats BCnEncoder at Best.&#x0a;It never changes the output size, only quality and time.&#x0a;Balanced suits both encoders. Best buys very little for a lot of time.">
           <TextBlock Text="Effort" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Qualities}" SelectedItem="{Binding Quality}"
                     MinWidth="110" IsEnabled="{Binding !IsBusy}" />
@@ -133,7 +133,14 @@
           <DataGridTextColumn Header="New" Binding="{Binding PredictedSizeText}" IsReadOnly="True" Width="90" />
           <DataGridTextColumn Header="Saved" Binding="{Binding SavingText}" IsReadOnly="True" Width="90" />
           <DataGridTextColumn Header="Content" Binding="{Binding Content}" IsReadOnly="True" Width="*" />
-          <DataGridTextColumn Header="Resize cost" Binding="{Binding ResizeCost}" IsReadOnly="True" Width="230" />
+          <DataGridTextColumn Header="Resize cost" Binding="{Binding ResizeCost}" IsReadOnly="True" Width="230">
+            <DataGridTextColumn.HeaderTemplate>
+              <DataTemplate>
+                <TextBlock Text="Resize cost"
+                           ToolTip.Tip="Detail lost by halving this texture, measured on its own pixels.&#x0a;It does not depend on the encoder, and does not need to: block compression contributes 54-78 dB while resizing contributes 30-50 dB, so the resize term dominates the total.&#x0a;Measured against the full pipeline it is accurate to about 1 dB." />
+              </DataTemplate>
+            </DataGridTextColumn.HeaderTemplate>
+          </DataGridTextColumn>
         </DataGrid.Columns>
       </DataGrid>
 

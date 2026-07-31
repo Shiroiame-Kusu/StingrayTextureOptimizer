@@ -220,6 +220,17 @@ So `balanced` is the right default in both cases. Reach for `fast` only when
 you are iterating and everything is BC7; avoid it when BC1 is in play. `best`
 buys almost nothing for a large amount of time.
 
+**Effort is relative to the encoder you picked, not an absolute quality
+target.** The same word means different things:
+
+| | Fast | Balanced | Best |
+| --- | --- | --- | --- |
+| Compressonator | 51.6 dB | **54.6 dB** | 55.4 dB |
+| BCnEncoder | 50.9 dB | 51.3 dB | 51.6 dB |
+
+Compressonator at `balanced` beats BCnEncoder at `best` by 3 dB. Switching
+encoder changes your output even if you leave Effort alone.
+
 ### Threads — `--threads`
 
 Encoder worker threads. Defaults to **CPU count − 4**, deliberately leaving cores
@@ -330,6 +341,19 @@ PSNR. That number says how much detail genuinely needs full resolution:
 | 36–45 dB | Slight softening |
 | 30–36 dB | Visible softening |
 | < 30 dB | Real detail lost |
+
+**This figure does not change with the encoder, and does not need to.** It is
+measured on the texture's own pixels, before compression. Block compression
+contributes far less error than halving does, so the resize term dominates the
+total — checked against the full resize-and-re-encode pipeline on real textures:
+
+| Texture | Reported | Resize + encode | Encode alone |
+| --- | --- | --- | --- |
+| detailed normal map | 30.0 dB | 29.9 dB | 53.9 dB |
+| artwork | 37.4 dB | 36.2 dB | 57.4 dB |
+| smooth | 50.4 dB | 49.8 dB | 78.3 dB |
+
+So the number you see is within about 1 dB of what you actually get.
 
 From one real bundle's eight distinct 4096² textures: three were a single colour,
 three scored 47–93 dB, one scored 38 dB, and only one scored 30 dB — a normal map
