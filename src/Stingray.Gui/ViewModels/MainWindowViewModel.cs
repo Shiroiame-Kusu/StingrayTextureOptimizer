@@ -4,6 +4,7 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Stingray.Core;
 using Stingray.Core.Format;
 using Stingray.Core.Optimization;
 using Stingray.Core.Textures;
@@ -76,6 +77,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private int _threadCount = Math.Max(1, Environment.ProcessorCount - 4);
 
     public int MaxThreads => Environment.ProcessorCount;
+
+    public string Title => BuildInfo.ProductAndVersion;
+    public string VersionLabel => $"v{BuildInfo.Version}";
 
     public long CurrentSize { get; private set; }
     public long PredictedSize { get; private set; }

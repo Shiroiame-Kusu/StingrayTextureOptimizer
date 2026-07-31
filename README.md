@@ -343,6 +343,12 @@ find out rather than quietly getting the slow path. See
 
 Analyse and report without writing anything.
 
+### `--version`
+
+Prints the version and exits. Release builds carry their git tag; untagged CI
+builds report `0.0.0-<sha>`, so any binary can be traced back to a commit. The
+GUI shows the same string in its title bar and bottom-right corner.
+
 ## Deduplication
 
 Every GPU payload is hashed. Where several entries have byte-identical content,

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+using Stingray.Core;
 using Stingray.Core.Dds;
 using Stingray.Core.Format;
 using Stingray.Core.Optimization;
@@ -12,6 +13,12 @@ internal static class Program
 {
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] is "--version" or "-V")
+        {
+            Console.WriteLine(BuildInfo.ProductAndVersion);
+            return 0;
+        }
+
         if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
         {
             PrintUsage();
@@ -216,8 +223,8 @@ internal static class Program
     }
 
     private static void PrintUsage() => Console.WriteLine(
-        """
-        stingray-tex - shrink Stingray/Bitsquid bundles by block-compressing their textures
+        $"""
+        stingray-tex {BuildInfo.Version} - shrink Stingray/Bitsquid bundles by block-compressing their textures
 
         Copyright (C) 2026 Shiroiame-Kusu. This program comes
         with ABSOLUTELY NO WARRANTY. It is free software, and you are welcome to
@@ -247,6 +254,7 @@ internal static class Program
                               detail cost per texture before you commit.
           --dry-run           analyse and report without writing
           --original <path>   for verify: the pre-optimisation bundle to compare against
+          --version           print the version and exit
 
         EXAMPLES
           stingray-tex analyze  mymod.patch_0

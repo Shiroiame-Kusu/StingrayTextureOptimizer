@@ -7,7 +7,7 @@
         xmlns:vm="clr-namespace:Stingray.Gui.ViewModels"
         x:Class="Stingray.Gui.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="Stingray Texture Optimizer"
+        Title="{Binding Title}"
         Width="1180" Height="720" MinWidth="900" MinHeight="520">
 
   <DockPanel Margin="12">
@@ -75,7 +75,7 @@
     </Border>
 
     <Border DockPanel.Dock="Bottom" Padding="0,10,0,0">
-      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto">
+      <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto,Auto,Auto">
         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Status}" TextWrapping="Wrap"
                    VerticalAlignment="Center" Margin="0,0,12,0" />
         <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="12">
@@ -102,6 +102,8 @@
                    VerticalAlignment="Bottom" HorizontalAlignment="Right"
                    ToolTip.Tip="The fast encoder is a small native library bundled with release downloads. Building from source? See native/README.md."
                    Text="{Binding BackendStatus}" />
+        <TextBlock Grid.Row="3" Grid.Column="1" Opacity="0.4" FontSize="11"
+                   HorizontalAlignment="Right" Text="{Binding VersionLabel}" />
       </Grid>
     </Border>
 
