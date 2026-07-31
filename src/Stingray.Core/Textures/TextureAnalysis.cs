@@ -40,6 +40,13 @@ public sealed class TextureAnalysis
     /// <summary>Alpha carries information, so an alpha-capable format is required.</summary>
     public bool HasAlphaDetail => !Alpha.IsConstant || Alpha.Minimum != 255;
 
+    /// <summary>
+    /// Alpha is a pure cutout — only fully transparent or fully opaque. BC1 carries
+    /// one bit of alpha, so such a texture fits it at half the size of BC7.
+    /// </summary>
+    public bool HasBinaryAlpha =>
+        Alpha.DistinctValues == 2 && Alpha.Minimum == 0 && Alpha.Maximum == 255;
+
     public byte[] SolidColour => [Red.Minimum, Green.Minimum, Blue.Minimum, Alpha.Minimum];
 
     /// <summary>

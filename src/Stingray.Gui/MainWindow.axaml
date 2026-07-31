@@ -30,10 +30,10 @@
         </WrapPanel.Styles>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="Which format to pick for each texture.&#x0a;Balanced: BC1 where alpha is unused, BC7 where it is not.&#x0a;Best quality: BC7 everywhere, never BC1 for real image content.&#x0a;Smallest size: BC1 wherever alpha carries no information.">
+                    ToolTip.Tip="Which block format each texture is encoded to.&#x0a;BC1 is half the size of BC7 but has 5:6:5 colour endpoints, so it bands on gradients.&#x0a;BC7 reproduces any 8-bit RGBA almost exactly.&#x0a;Smallest size also uses BC1 for pure cutout masks, since BC1 carries one alpha bit.">
           <TextBlock Text="Format" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Strategies}" SelectedItem="{Binding Strategy}"
-                    MinWidth="140" IsEnabled="{Binding !IsBusy}" />
+                    MinWidth="250" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"

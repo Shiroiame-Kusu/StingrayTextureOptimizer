@@ -46,7 +46,14 @@ public static class TextureEncoder
         if (targetWidth != sourceWidth || targetHeight != sourceHeight)
             rgba = Resample(rgba, sourceWidth, sourceHeight, targetWidth, targetHeight);
 
-        var encoder = new BcEncoder(ToCompressionFormat(targetFormat));
+        // BC1 has two encodings: opaque, and one with a single alpha bit. Pick the
+        // latter only when the surface actually has transparent pixels, since the
+        // alpha-capable mode gives up one colour endpoint.
+        var format = ToCompressionFormat(targetFormat);
+        if (format == CompressionFormat.Bc1 && HasTransparency(rgba))
+            format = CompressionFormat.Bc1WithAlpha;
+
+        var encoder = new BcEncoder(format);
         encoder.OutputOptions.GenerateMipMaps = false;
         encoder.OutputOptions.Quality = ToQuality(options.Quality);
         encoder.Options.IsParallel = options.ThreadCount > 1;
@@ -62,6 +69,13 @@ public static class TextureEncoder
               + $"{targetFormat.DisplayName()}, expected {expected}.");
 
         return encoded;
+    }
+
+    private static bool HasTransparency(ReadOnlySpan<byte> rgba)
+    {
+        for (var i = 3; i < rgba.Length; i += 4)
+            if (rgba[i] != 255) return true;
+        return false;
     }
 
     /// <summary>

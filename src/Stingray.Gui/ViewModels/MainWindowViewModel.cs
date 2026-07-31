@@ -19,16 +19,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public IReadOnlyList<StrategyChoice> Strategies { get; } =
     [
-        new(OptimizationStrategy.Balanced, "Balanced"),
-        new(OptimizationStrategy.MaximumQuality, "Best quality"),
-        new(OptimizationStrategy.SmallestSize, "Smallest size"),
+        new(OptimizationStrategy.Balanced, "Balanced (BC1 opaque, BC7 with alpha)"),
+        new(OptimizationStrategy.MaximumQuality, "Best quality (BC7 always)"),
+        new(OptimizationStrategy.SmallestSize, "Smallest size (BC1 wherever it fits)"),
     ];
 
     public IReadOnlyList<QualityChoice> Qualities { get; } =
     [
-        new(EncodeQuality.Fast, "Fast"),
+        new(EncodeQuality.Fast, "Fast (lowest quality)"),
         new(EncodeQuality.Balanced, "Balanced"),
-        new(EncodeQuality.Best, "Best"),
+        new(EncodeQuality.Best, "Best (slowest)"),
     ];
 
     public IReadOnlyList<SizeCap> SizeCaps { get; } =
@@ -54,7 +54,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     [ObservableProperty] private SizeCap _sizeCap = new(0, "Keep original");
     [ObservableProperty] private StrategyChoice _strategy =
-        new(OptimizationStrategy.Balanced, "Balanced");
+        new(OptimizationStrategy.Balanced, "Balanced (BC1 opaque, BC7 with alpha)");
     [ObservableProperty] private QualityChoice _quality =
         new(EncodeQuality.Balanced, "Balanced");
 

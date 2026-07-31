@@ -55,7 +55,11 @@ public static class TextureDecoder
 
     internal static CompressionFormat ToCompressionFormat(DxgiFormat format) => format switch
     {
-        DxgiFormat.Bc1Unorm or DxgiFormat.Bc1UnormSrgb => CompressionFormat.Bc1,
+        // BC1 signals punchthrough alpha per block through endpoint ordering, so
+        // decoding as Bc1WithAlpha is the correct reading of any BC1 payload:
+        // blocks without it decode identically, and blocks with it keep their
+        // transparency instead of turning black.
+        DxgiFormat.Bc1Unorm or DxgiFormat.Bc1UnormSrgb => CompressionFormat.Bc1WithAlpha,
         DxgiFormat.Bc2Unorm or DxgiFormat.Bc2UnormSrgb => CompressionFormat.Bc2,
         DxgiFormat.Bc3Unorm or DxgiFormat.Bc3UnormSrgb => CompressionFormat.Bc3,
         DxgiFormat.Bc4Unorm => CompressionFormat.Bc4,

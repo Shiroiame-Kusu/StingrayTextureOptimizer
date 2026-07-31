@@ -124,14 +124,19 @@ The same settings appear in the GUI toolbar and on the command line.
 
 Which block format each texture is encoded to. Affects both size and quality.
 
-| Value | GUI label | Behaviour |
-| --- | --- | --- |
-| `balanced` *(default)* | Balanced | BC1 where alpha carries no information, BC7 where it does |
-| `quality` | Best quality | BC7 everywhere; never BC1 for real image content |
-| `smallest` | Smallest size | BC1 wherever alpha carries no information |
+| Value | GUI label | Opaque | Cutout alpha | Graded alpha |
+| --- | --- | --- | --- | --- |
+| `balanced` *(default)* | Balanced (BC1 opaque, BC7 with alpha) | BC1 | BC7 | BC7 |
+| `quality` | Best quality (BC7 always) | BC7 | BC7 | BC7 |
+| `smallest` | Smallest size (BC1 wherever it fits) | BC1 | **BC1** | BC7 |
 
 BC1 is half the size of BC7 but has 5:6:5 colour endpoints, so it bands on
-gradients. BC7 reproduces any 8-bit RGBA nearly exactly.
+gradients. BC7 reproduces any 8-bit RGBA almost exactly.
+
+"Cutout alpha" means alpha is only ever 0 or 255 — a stencil mask with no
+partial transparency. BC1 stores exactly one bit of alpha, so those fit it at
+half the size of BC7. Anything with graded alpha needs BC7 under every
+strategy.
 
 ### Effort — `--quality` (GUI: *Effort*)
 

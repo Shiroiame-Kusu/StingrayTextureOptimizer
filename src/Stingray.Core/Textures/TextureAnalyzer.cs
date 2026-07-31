@@ -154,10 +154,17 @@ public static class TextureAnalyzer
             };
         }
 
-        if (!analysis.HasAlphaDetail && strategy != OptimizationStrategy.MaximumQuality)
+        // BC1 fits when alpha carries nothing, and under the smallest-size strategy
+        // also when alpha is a pure cutout, since BC1 stores one bit of it.
+        var bc1Fits = !analysis.HasAlphaDetail
+                   || (strategy == OptimizationStrategy.SmallestSize && analysis.HasBinaryAlpha);
+
+        if (bc1Fits && strategy != OptimizationStrategy.MaximumQuality)
         {
             var (bw, bh, bnote) = ApplyDownscale(width, height, maxDimension, analysis);
-            const string opaque = "alpha is uniformly opaque, so BC1 halves the size of an alpha-capable format";
+            var opaque = analysis.HasAlphaDetail
+                ? "alpha is a pure cutout, which fits BC1's single alpha bit at half the size of BC7"
+                : "alpha is uniformly opaque, so BC1 halves the size of an alpha-capable format";
             return new FormatRecommendation
             {
                 Format = MatchColourSpace(DxgiFormat.Bc1Unorm, sourceFormat),

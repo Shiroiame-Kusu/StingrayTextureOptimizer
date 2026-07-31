@@ -108,6 +108,51 @@ public class TextureAnalyzerTests
     }
 
     [Fact]
+    public void EveryStrategyProducesADistinctResult()
+    {
+        // A pure cutout mask: BC1 carries one alpha bit, so smallest-size can use
+        // it where the other strategies must fall back to BC7. Without this the
+        // Balanced and SmallestSize options were byte-for-byte identical.
+        var cutout = Surface(64, 64,
+            (x, y) => ((byte)x, (byte)y, (byte)(x ^ y), (byte)(x < 32 ? 0 : 255)));
+        var analysis = TextureAnalyzer.Analyze(cutout, 64, 64);
+
+        Assert.True(analysis.HasBinaryAlpha);
+        Assert.Equal(DxgiFormat.Bc7Unorm,
+            TextureAnalyzer.Recommend(analysis, 64, 64, OptimizationStrategy.Balanced).Format);
+        Assert.Equal(DxgiFormat.Bc7Unorm,
+            TextureAnalyzer.Recommend(analysis, 64, 64, OptimizationStrategy.MaximumQuality).Format);
+        Assert.Equal(DxgiFormat.Bc1Unorm,
+            TextureAnalyzer.Recommend(analysis, 64, 64, OptimizationStrategy.SmallestSize).Format);
+    }
+
+    [Fact]
+    public void GradedAlphaIsNeverForcedIntoBc1()
+    {
+        // Sixty-four alpha levels cannot survive a single alpha bit.
+        var graded = Surface(64, 64, (x, y) => ((byte)x, (byte)y, (byte)(x ^ y), (byte)(x * 4)));
+        var analysis = TextureAnalyzer.Analyze(graded, 64, 64);
+
+        Assert.False(analysis.HasBinaryAlpha);
+        Assert.Equal(DxgiFormat.Bc7Unorm,
+            TextureAnalyzer.Recommend(analysis, 64, 64, OptimizationStrategy.SmallestSize).Format);
+    }
+
+    [Fact]
+    public void CutoutAlphaSurvivesBc1Encoding()
+    {
+        // BC1's alpha bit must actually be emitted, not silently dropped.
+        var cutout = Surface(16, 16, (x, _) => (200, 40, 40, (byte)(x < 8 ? 0 : 255)));
+        var bc1 = TextureEncoder.Encode(cutout, 16, 16, DxgiFormat.R8G8B8A8Unorm,
+                                        16, 16, DxgiFormat.Bc1Unorm,
+                                        new EncodeOptions { Quality = EncodeQuality.Best, ThreadCount = 2 });
+        var back = TextureDecoder.Decode(bc1, 16, 16, DxgiFormat.Bc1Unorm);
+
+        Assert.Equal(0, back[3]);            // first pixel transparent
+        Assert.Equal(255, back[(8 * 4) + 3]); // ninth pixel opaque
+    }
+
+    [Fact]
     public void ContentWithAlphaAlwaysUsesAnAlphaCapableFormat()
     {
         var analysis = TextureAnalyzer.Analyze(
