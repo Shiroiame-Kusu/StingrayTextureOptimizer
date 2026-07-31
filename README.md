@@ -140,9 +140,31 @@ strategy.
 
 ### Effort — `--quality` (GUI: *Effort*)
 
-`fast` | `balanced` *(default)* | `best`. How hard the compressor searches for
-the best encoding. **This does not change the output size** — only how close the
-result is to the source, and how long it takes.
+`fast` | `balanced` *(default)* | `best`. How many encodings the compressor tries
+before settling. **It never changes the output size** — block formats are fixed
+rate — only how close the result is to the source, and how long it takes.
+
+Measured on a real 4096×4096 artwork texture, 12 threads:
+
+| Format | Effort | Time | PSNR (RGB) |
+| --- | --- | --- | --- |
+| BC7 | Fast | 16.7 s | 50.62 dB |
+| BC7 | Balanced | 22.9 s | 50.90 dB |
+| BC7 | Best | 54.4 s | 51.24 dB |
+| BC1 | Fast | 0.3 s | 37.98 dB |
+| BC1 | Balanced | 1.1 s | 41.23 dB |
+| BC1 | Best | 0.9 s | 41.29 dB |
+
+The two formats behave completely differently:
+
+- **BC7 barely responds.** The whole range spans 0.6 dB while taking 3.3× longer.
+  `Best` is not worth it; even `Fast` is visually indistinguishable.
+- **BC1 responds a lot at the bottom.** `Fast` costs 3.3 dB against `Balanced`,
+  which is a real, visible difference — and `Best` adds nothing beyond it.
+
+So `balanced` is the right default in both cases. Reach for `fast` only when
+you are iterating and everything is BC7; avoid it when BC1 is in play. `best`
+buys almost nothing for a large amount of time.
 
 ### Threads — `--threads`
 

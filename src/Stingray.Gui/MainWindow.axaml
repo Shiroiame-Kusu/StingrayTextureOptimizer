@@ -37,7 +37,7 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="How hard the compressor searches for the best encoding.&#x0a;Slower settings look slightly closer to the source.&#x0a;This does not change the output size.">
+                    ToolTip.Tip="How many encodings the compressor tries before settling.&#x0a;This never changes the output size, only quality and time.&#x0a;Measured on a 4096x4096 texture: BC7 spans just 0.6 dB from Fast to Best while taking 3x longer, so Best is rarely worth it.&#x0a;BC1 is different: Fast costs about 3 dB against Balanced, which is visible. Balanced suits both.">
           <TextBlock Text="Effort" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Qualities}" SelectedItem="{Binding Quality}"
                     MinWidth="110" IsEnabled="{Binding !IsBusy}" />
