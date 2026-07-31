@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
 // SPDX-License-Identifier: GPL-3.0-or-later
 
-using BCnEncoder.Encoder;
-using BCnEncoder.Shared;
 using Stingray.Core.Dds;
 
 namespace Stingray.Core.Textures;
@@ -23,11 +21,37 @@ public sealed class EncodeOptions
     /// saturating every core makes desktop sessions unusable during long encodes.
     /// </summary>
     public int ThreadCount { get; init; } = Math.Max(1, Environment.ProcessorCount - 4);
+
+    /// <summary>
+    /// Which compressor to use. <see cref="EncoderBackend.Auto"/> prefers
+    /// Compressonator's HPC path and falls back to the managed encoder.
+    /// </summary>
+    public EncoderBackend Backend { get; init; } = EncoderBackend.Auto;
 }
 
-/// <summary>Block-compresses surfaces via BCnEncoder.Net.</summary>
+/// <summary>Block-compresses surfaces, optionally resizing them on the way.</summary>
 public static class TextureEncoder
 {
+    private static readonly ManagedEncoderBackend Managed = new();
+    private static readonly CompressonatorBackend Compressonator = new();
+
+    /// <summary>The backend a given preference resolves to right now.</summary>
+    public static IBlockEncoderBackend Resolve(EncoderBackend preference) => preference switch
+    {
+        EncoderBackend.Managed => Managed,
+        EncoderBackend.Compressonator => Compressonator.IsAvailable
+            ? Compressonator
+            : throw new InvalidOperationException(
+                $"Compressonator was requested but is unusable: {CompressonatorBackend.UnavailableReason}."),
+        _ => Compressonator.IsAvailable ? Compressonator : Managed,
+    };
+
+    /// <summary>Human-readable summary of what Auto would pick, and why.</summary>
+    public static string BackendStatus =>
+        Compressonator.IsAvailable
+            ? Compressonator.Name
+            : $"{Managed.Name} ({CompressonatorBackend.UnavailableReason})";
+
     public static byte[] Encode(
         ReadOnlySpan<byte> surface,
         int sourceWidth,
@@ -46,21 +70,22 @@ public static class TextureEncoder
         if (targetWidth != sourceWidth || targetHeight != sourceHeight)
             rgba = Resample(rgba, sourceWidth, sourceHeight, targetWidth, targetHeight);
 
-        // BC1 has two encodings: opaque, and one with a single alpha bit. Pick the
-        // latter only when the surface actually has transparent pixels, since the
-        // alpha-capable mode gives up one colour endpoint.
-        var format = ToCompressionFormat(targetFormat);
-        if (format == CompressionFormat.Bc1 && HasTransparency(rgba))
-            format = CompressionFormat.Bc1WithAlpha;
-
-        var encoder = new BcEncoder(format);
-        encoder.OutputOptions.GenerateMipMaps = false;
-        encoder.OutputOptions.Quality = ToQuality(options.Quality);
-        encoder.Options.IsParallel = options.ThreadCount > 1;
-        encoder.Options.TaskCount = options.ThreadCount;
-
-        var encoded = encoder.EncodeToRawBytes(
-            rgba, targetWidth, targetHeight, PixelFormat.Rgba32, 0, out _, out _);
+        var backend = Resolve(options.Backend);
+        byte[] encoded;
+        try
+        {
+            encoded = backend.Encode(rgba, targetWidth, targetHeight, targetFormat, options);
+        }
+        catch (Exception ex) when (backend is CompressonatorBackend
+                                   && options.Backend == EncoderBackend.Auto
+                                   && ex is InvalidOperationException or IOException
+                                         or NotSupportedException
+                                         or System.ComponentModel.Win32Exception)
+        {
+            // Auto must never fail outright: if the native path breaks mid-run,
+            // finish the job on the managed encoder rather than losing the batch.
+            encoded = Managed.Encode(rgba, targetWidth, targetHeight, targetFormat, options);
+        }
 
         var expected = targetFormat.SurfaceSize(targetWidth, targetHeight);
         if (encoded.LongLength != expected)
@@ -69,13 +94,6 @@ public static class TextureEncoder
               + $"{targetFormat.DisplayName()}, expected {expected}.");
 
         return encoded;
-    }
-
-    private static bool HasTransparency(ReadOnlySpan<byte> rgba)
-    {
-        for (var i = 3; i < rgba.Length; i += 4)
-            if (rgba[i] != 255) return true;
-        return false;
     }
 
     /// <summary>
@@ -127,24 +145,6 @@ public static class TextureEncoder
 
         return result;
     }
-
-    private static CompressionFormat ToCompressionFormat(DxgiFormat format) => format switch
-    {
-        DxgiFormat.Bc1Unorm or DxgiFormat.Bc1UnormSrgb => CompressionFormat.Bc1,
-        DxgiFormat.Bc2Unorm or DxgiFormat.Bc2UnormSrgb => CompressionFormat.Bc2,
-        DxgiFormat.Bc3Unorm or DxgiFormat.Bc3UnormSrgb => CompressionFormat.Bc3,
-        DxgiFormat.Bc4Unorm => CompressionFormat.Bc4,
-        DxgiFormat.Bc5Unorm => CompressionFormat.Bc5,
-        DxgiFormat.Bc7Unorm or DxgiFormat.Bc7UnormSrgb => CompressionFormat.Bc7,
-        _ => throw new NotSupportedException($"{format.DisplayName()} is not a supported encode target."),
-    };
-
-    private static CompressionQuality ToQuality(EncodeQuality quality) => quality switch
-    {
-        EncodeQuality.Fast => CompressionQuality.Fast,
-        EncodeQuality.Best => CompressionQuality.BestQuality,
-        _ => CompressionQuality.Balanced,
-    };
 
     /// <summary>Formats offered as manual overrides in the UI.</summary>
     public static IReadOnlyList<DxgiFormat> SupportedTargets { get; } =

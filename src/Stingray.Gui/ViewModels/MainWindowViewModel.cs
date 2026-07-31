@@ -31,6 +31,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
         new(EncodeQuality.Best, "Best (slowest)"),
     ];
 
+    public IReadOnlyList<BackendChoice> Backends { get; } =
+    [
+        new(EncoderBackend.Auto, "Automatic"),
+        new(EncoderBackend.Compressonator, "Fast (Compressonator)"),
+        new(EncoderBackend.Managed, "Portable (BCnEncoder)"),
+    ];
+
+    /// <summary>What Auto resolves to right now, shown so the choice is not opaque.</summary>
+    public string BackendStatus => $"Encoder: {TextureEncoder.BackendStatus}";
+
     public IReadOnlyList<SizeCap> SizeCaps { get; } =
     [
         new(0, "Keep original"),
@@ -47,6 +57,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _progressText = "";
     [ObservableProperty] private bool _collapseSolidColours = true;
     [ObservableProperty] private bool _deduplicate = true;
+    [ObservableProperty] private BackendChoice _encoder = new(EncoderBackend.Auto, "Automatic");
 
     /// <summary>
     /// Resizing is the only genuinely lossy option here, so it is off by default
@@ -201,7 +212,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
                 return BundleOptimizer.Apply(
                     _plan, gpu, _bundle.Path, _bundle.GpuResourcePath,
-                    new EncodeOptions { Quality = Quality.Value, ThreadCount = ThreadCount },
+                    new EncodeOptions
+                    {
+                        Quality = Quality.Value,
+                        ThreadCount = ThreadCount,
+                        Backend = Encoder.Value,
+                    },
                     reporter, Deduplicate);
             });
 
@@ -279,6 +295,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }
+}
+
+/// <summary>An encoder backend, with the label shown in the dropdown.</summary>
+public sealed record BackendChoice(EncoderBackend Value, string Label)
+{
+    public override string ToString() => Label;
 }
 
 /// <summary>An optimisation strategy, with the label shown in the dropdown.</summary>

@@ -7,6 +7,51 @@ of megabytes.
 Works on bundles from Helldivers 2, Darktide and Vermintide 2 — the
 `<hash>.patch_N` + `.gpu_resources` pair.
 
+## Quick start
+
+New to this? Three steps.
+
+**1. Download and unpack.** Grab the archive for your system from
+[Releases](../../releases) and unzip it anywhere. Nothing to install.
+
+**2. Point it at your mod.** Run `stingray-tex-gui`, click **Open bundle…**, and
+pick the bundle file — the one with **no extension** or ending in `.patch_0`,
+`.patch_1` and so on. Not the `.gpu_resources` file; that one is found
+automatically.
+
+**3. Look, then click Optimize.** The grid lists every texture that can be
+shrunk and what it will become. The bottom-right shows the total. Press
+**Optimize** when you are happy.
+
+Your original files are copied to a `backup/` folder next to the bundle before
+anything is written, and the result is checked automatically afterwards.
+
+### What should I choose?
+
+**The defaults are safe — you can just press Optimize.** Everything on by
+default is either exactly lossless or visually indistinguishable.
+
+If you want to go further, the one setting worth touching is **Max size**. It
+halves oversized textures, which is the only option here that actually throws
+detail away. It is off by default. Turn it to `2048 max` and look at the
+**Resize cost** column: textures that say *no visible detail at full size* are
+free wins, and you can untick anything that says *real detail lost*.
+
+### Is this safe?
+
+- Your originals are backed up before anything is written.
+- The result is verified automatically; the tool tells you if anything is wrong.
+- Non-texture data — models, bones, materials — is copied through untouched, byte
+  for byte.
+
+**Test the result in-game before you share a mod.** Keep the `backup/` folder
+until you have.
+
+### If something looks wrong
+
+Restore by copying everything from `backup/` back over the bundle. That is all
+it takes; nothing else is modified.
+
 ## Why
 
 Textures exported from an image editor land in a bundle as uncompressed RGBA8
@@ -191,6 +236,34 @@ Byte-identical payloads are stored once and referenced by every entry that uses
 them. Lossless, and usually the largest saving in an already-compressed bundle.
 **Shrinks the file only** — see [File size is not video
 memory](#file-size-is-not-video-memory).
+
+### Encoder — `--encoder` (GUI: *Encoder*)
+
+Which compressor does the work. `auto` *(default)* | `compressonator` | `managed`.
+
+| Value | GUI label | What it is |
+| --- | --- | --- |
+| `auto` *(default)* | Automatic | Fast when available, portable otherwise |
+| `compressonator` | Fast (Compressonator) | Bundled ~500 KB native library built from AMD's CMP_Core |
+| `managed` | Portable (BCnEncoder) | Pure managed, always available |
+
+The fast encoder is both quicker *and* slightly better. Measured on a 4096×4096
+texture at 12 threads:
+
+| Encoder | Effort | Time | PSNR |
+| --- | --- | --- | --- |
+| Compressonator | Fast | **1.6 s** | 51.6 dB |
+| Compressonator | Balanced | 8.6 s | **54.6 dB** |
+| BCnEncoder | Fast | 18.8 s | 50.9 dB |
+| BCnEncoder | Best | 55.2 s | 51.6 dB |
+
+Compressonator at *Fast* matches BCnEncoder at *Best*, 34× quicker.
+
+The native library ships for **Linux and Windows**. macOS releases contain the
+managed encoder only, and `auto` falls back to it silently — as it does anywhere
+the library is missing. `--encoder compressonator` fails loudly instead, so you
+find out rather than quietly getting the slow path. See
+[`native/README.md`](native/README.md) to build it yourself.
 
 ### `--dry-run`
 

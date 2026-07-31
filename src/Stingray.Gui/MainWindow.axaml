@@ -57,6 +57,13 @@
                     MinWidth="130" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
 
+        <StackPanel Orientation="Horizontal" Spacing="6"
+                    ToolTip.Tip="Which compressor does the work.&#x0a;Fast uses the bundled Compressonator CMP_Core library: several times quicker and slightly better quality.&#x0a;Portable uses the pure-managed encoder, which always works.&#x0a;Automatic prefers Fast and falls back to Portable when the native library is missing.">
+          <TextBlock Text="Encoder" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding Backends}" SelectedItem="{Binding Encoder}"
+                    MinWidth="180" IsEnabled="{Binding !IsBusy}" />
+        </StackPanel>
+
         <CheckBox Content="Collapse solid colours"
                   IsChecked="{Binding CollapseSolidColours}" IsEnabled="{Binding !IsBusy}"
                   ToolTip.Tip="A texture whose every pixel is identical is rewritten at 16x16.&#x0a;Visually lossless: a constant texture samples the same at any resolution.&#x0a;Saves both file size and video memory." />
@@ -89,6 +96,8 @@
         <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0"
                    Opacity="0.5" FontSize="11" TextWrapping="Wrap"
                    Text="Stingray Texture Optimizer, Copyright (C) 2026 Shiroiame-Kusu. Free software with ABSOLUTELY NO WARRANTY, redistributable under the GNU GPL v3 or later. See LICENSE." />
+        <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Opacity="0.5" FontSize="11"
+                   HorizontalAlignment="Right" Text="{Binding BackendStatus}" />
       </Grid>
     </Border>
 

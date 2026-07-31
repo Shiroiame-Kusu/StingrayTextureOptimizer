@@ -56,6 +56,28 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
+      # The fast encoder is a ~500 KB shared library built from Compressonator's
+      # CMP_Core. Linux and Windows only: macOS would mean a third native payload
+      # for a platform this tool is rarely used on, and the managed encoder covers
+      # it. Only two directories of that repo are needed.
+      - name: Check out Compressonator (CMP_Core)
+        if: runner.os != 'macOS'
+        uses: actions/checkout@v4
+        with:
+          repository: GPUOpen-Tools/compressonator
+          ref: master
+          path: external/compressonator
+          sparse-checkout: |
+            cmp_core
+            applications/_libs/cmp_math
+          sparse-checkout-cone-mode: false
+
+      - name: Build native encoder shim
+        if: runner.os != 'macOS'
+        run: |
+          cmake -S native -B build/native -DCMAKE_BUILD_TYPE=Release -DCOMPRESSONATOR_SOURCE=external/compressonator
+          cmake --build build/native --config Release
+
       - name: Derive version
         id: version
         shell: bash
@@ -92,6 +114,17 @@ jobs:
             ! -name '*.pdb' ! -name '*.dbg' ! -name '*.dwarf' \
             -exec cp {} "$stage/" \;
           cp LICENSE README.md "$stage/"
+
+          # The shim sits next to the executables; the app also looks in tools/.
+          # Its MIT notice must ship with it.
+          shim=$(find build/native \( -name 'stingray_cmp.so' -o -name 'stingray_cmp.dll' \) 2>/dev/null | head -1 || true)
+          if [ -n "$shim" ]; then
+            cp "$shim" "$stage/"
+            cp native/COMPRESSONATOR-LICENSE.txt "$stage/"
+            echo "bundled fast encoder: $shim"
+          else
+            echo "no native shim for this platform; managed encoder only"
+          fi
           echo "STAGE=$stage" >> "$GITHUB_ENV"
           ls -la "$stage"
 

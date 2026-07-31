@@ -20,6 +20,7 @@ internal sealed class CommandLine
     public bool NoCollapse { get; private init; }
     public bool NoDedup { get; private init; }
     public int MaxDimension { get; private init; }
+    public EncoderBackend Backend { get; private init; } = EncoderBackend.Auto;
     public OptimizationStrategy Strategy { get; private init; } = OptimizationStrategy.Balanced;
     public EncodeQuality Quality { get; private init; } = EncodeQuality.Balanced;
 
@@ -31,6 +32,7 @@ internal sealed class CommandLine
         string? path = null, output = null, backup = null, original = null;
         int? threads = null;
         var maxDimension = 0;
+        var backend = EncoderBackend.Auto;
         bool dryRun = false, noCollapse = false, noDedup = false;
         var strategy = OptimizationStrategy.Balanced;
         var quality = EncodeQuality.Balanced;
@@ -49,6 +51,7 @@ internal sealed class CommandLine
                 case "--original": original = Next(it, arg); break;
                 case "--threads": threads = ParseThreads(Next(it, arg)); break;
                 case "--max-size": maxDimension = ParseMaxSize(Next(it, arg)); break;
+                case "--encoder": backend = ParseBackend(Next(it, arg)); break;
                 case "--strategy": strategy = ParseStrategy(Next(it, arg)); break;
                 case "--quality": quality = ParseQuality(Next(it, arg)); break;
                 default:
@@ -66,11 +69,21 @@ internal sealed class CommandLine
             Path = path, Output = output, Backup = backup, Original = original,
             Threads = threads, DryRun = dryRun, NoCollapse = noCollapse, NoDedup = noDedup,
             Strategy = strategy, Quality = quality, MaxDimension = maxDimension,
+            Backend = backend,
         };
     }
 
     private static string Next(IEnumerator<string> it, string option) =>
         it.MoveNext() ? it.Current : throw new ArgumentException($"{option} requires a value.");
+
+    private static EncoderBackend ParseBackend(string value) => value.ToLowerInvariant() switch
+    {
+        "auto" => EncoderBackend.Auto,
+        "managed" or "bcnencoder" => EncoderBackend.Managed,
+        "compressonator" or "hpc" => EncoderBackend.Compressonator,
+        _ => throw new ArgumentException(
+            $"Unknown encoder '{value}'. Use auto, managed or compressonator."),
+    };
 
     private static int ParseMaxSize(string value)
     {

@@ -43,6 +43,7 @@ internal static class Program
 
         Console.WriteLine($"{Path.GetFileName(bundle.Path)}: {bundle.Files.Count} entries, "
                         + $"{bundle.Types.Count} types, gpu_resources {Human(gpu.Length)}");
+        Console.WriteLine($"encoder: {TextureEncoder.BackendStatus}");
         foreach (var type in bundle.Types)
             Console.WriteLine($"  {type.Count,4} x {type.TypeName}");
 
@@ -100,8 +101,11 @@ internal static class Program
         {
             Quality = options.Quality,
             ThreadCount = options.Threads ?? Math.Max(1, Environment.ProcessorCount - 4),
+            Backend = options.Backend,
         };
-        Console.WriteLine($"Encoding with {encodeOptions.ThreadCount} threads at {encodeOptions.Quality} quality...");
+        var backend = TextureEncoder.Resolve(encodeOptions.Backend);
+        Console.WriteLine($"Encoding with {backend.Name}, {encodeOptions.ThreadCount} threads, "
+                        + $"{encodeOptions.Quality} effort...");
 
         var lastStage = "";
         var progress = new Progress<ApplyProgress>(p =>
@@ -231,6 +235,9 @@ internal static class Program
           --strategy <name>   balanced (default) | quality | smallest
           --quality <name>    fast | balanced (default) | best
           --threads <n>       encoder threads (default: CPU count - 4)
+          --encoder <name>    auto (default) | managed | compressonator
+                              auto uses the bundled Compressonator HPC encoder when
+                              it is usable and falls back to the managed one
           --output <dir>      write results here instead of editing in place
           --backup <dir>      backup directory for in-place edits (default: ./backup)
           --no-collapse       keep solid-colour textures at their original dimensions
