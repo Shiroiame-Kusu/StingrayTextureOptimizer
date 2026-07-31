@@ -1,11 +1,65 @@
 # Stingray Texture Optimizer
 
+> I made this app because some mods have `gpu_resources` files that are already
+> 500+ MB, and loading them into the game can eat up roughly another 0.5 GB of
+> VRAM.
+>
+> And there's a small problem with that:
+>
+> My RTX 4060 only has 8 GB of VRAM.
+>
+> As soon as I enter the game, my VRAM usage goes over the limit, and the game
+> immediately starts stuttering.
+>
+> So I used AI to help me build this app. That said, all the testing and code
+> review are still done manually by me.
+>
+> I'm lazy, not stupid. 😎
+>
+> GLHF!
+
 Shrinks Stingray/Bitsquid game bundles by block-compressing the textures inside
 them. Built for mod authors whose `.gpu_resources` file has ballooned to hundreds
 of megabytes.
 
 Works on bundles from Helldivers 2, Darktide and Vermintide 2 — the
 `<hash>.patch_N` + `.gpu_resources` pair.
+
+## Results
+
+Two real mods. "GPU" is what the game has to hold in video memory, which is the
+number that matters if you are running out of it — it is not the same as the file
+size, see [File size is not video memory](#file-size-is-not-video-memory).
+
+| Mod | Disk | GPU memory |
+| --- | --- | --- |
+| 475 MiB, uncompressed RGBA8 textures | 475 → **174.7 MiB** | 475 → **203.1 MiB** |
+| 521 MiB, already all BC7 | 521.6 → **114.9 MiB** | 521.6 → **303.9 MiB** |
+| …the same mod, allowing a 2048 cap | 521.6 → **54.9 MiB** | 521.6 → **111.9 MiB** |
+
+The first two rows are **lossless**: block compression, collapsing surfaces that
+turned out to be a single colour, and storing byte-identical payloads once. Only
+the third row gives anything up, and it reports per texture exactly what.
+
+Both bundles verified afterwards: every entry resolves to the content it did
+before, and all non-texture data is byte-identical.
+
+For the 8 GB card that prompted this: the second mod drops from **521.6 MiB of
+VRAM to 303.9 MiB losslessly**, or **111.9 MiB** if you allow a 2048 cap. That
+cap halves 16 textures, of which the tool measures 8 as losing nothing visible,
+7 as softening slightly, and 1 as softening visibly — and it tells you which is
+which, so you can keep that last one at full size.
+
+### Why the numbers are what they are
+
+- **A 4096×4096 texture exported without block compression is exactly 64 MiB.**
+  Compressing it is 4–8×.
+- **Whole surfaces are often empty.** One mod had three 4096×4096 BC7 textures
+  holding a single colour, 16 MiB each, and 120 identical copies of one solid
+  black 1024×1024.
+- **Sharing duplicates shrinks the file but not video memory** — each entry is
+  still its own GPU resource. If VRAM is what you are short of, the setting you
+  want is `--max-size`.
 
 ## Quick start
 
