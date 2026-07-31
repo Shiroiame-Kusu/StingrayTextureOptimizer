@@ -32,6 +32,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
         new(EncodeQuality.Best, "Best (slowest)"),
     ];
 
+    public IReadOnlyList<MipModeChoice> MipModes { get; } =
+    [
+        new(MipMode.KeepChain, "Keep smaller levels"),
+        new(MipMode.SingleLevel, "Keep one level only"),
+    ];
+
     public IReadOnlyList<BackendChoice> Backends { get; } =
     [
         new(EncoderBackend.Auto, "Automatic"),
@@ -65,6 +71,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// and every affected texture reports its measured cost before you commit.
     /// </summary>
     [ObservableProperty] private SizeCap _sizeCap = new(0, "Keep original");
+    [ObservableProperty] private MipModeChoice _mipSelection = new(MipMode.KeepChain, "Keep smaller levels");
     [ObservableProperty] private StrategyChoice _strategy =
         new(OptimizationStrategy.Balanced, "Balanced (BC1 opaque, BC7 with alpha)");
     [ObservableProperty] private QualityChoice _quality =
@@ -141,6 +148,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             var cap = SizeCap.Value;
             var strategy = Strategy.Value;
+            var mips = MipSelection.Value;
             var (plan, bundle) = await Task.Run(() =>
             {
                 var loaded = Bundle.Load(path);
@@ -150,7 +158,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
                 using var gpu = GpuResourceFile.Open(loaded.GpuResourcePath);
                 return (OptimizationPlan.Build(loaded, gpu, strategy, CollapseSolidColours,
-                                               maxDimension: cap), loaded);
+                                               maxDimension: cap, mipMode: mips), loaded);
             });
 
             _bundle = bundle;
@@ -305,6 +313,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }
+
+    partial void OnMipSelectionChanged(MipModeChoice value)
+    {
+        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
+    }
+}
+
+/// <summary>What to do with a mip chain, with the label shown in the dropdown.</summary>
+public sealed record MipModeChoice(MipMode Value, string Label)
+{
+    public override string ToString() => Label;
 }
 
 /// <summary>An encoder backend, with the label shown in the dropdown.</summary>

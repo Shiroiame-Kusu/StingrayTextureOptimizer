@@ -21,6 +21,7 @@ internal sealed class CommandLine
     public bool NoDedup { get; private init; }
     public int MaxDimension { get; private init; }
     public EncoderBackend Backend { get; private init; } = EncoderBackend.Auto;
+    public MipMode MipMode { get; private init; } = MipMode.KeepChain;
     public OptimizationStrategy Strategy { get; private init; } = OptimizationStrategy.Balanced;
     public EncodeQuality Quality { get; private init; } = EncodeQuality.Balanced;
 
@@ -33,6 +34,7 @@ internal sealed class CommandLine
         int? threads = null;
         var maxDimension = 0;
         var backend = EncoderBackend.Auto;
+        var mipMode = MipMode.KeepChain;
         bool dryRun = false, noCollapse = false, noDedup = false;
         var strategy = OptimizationStrategy.Balanced;
         var quality = EncodeQuality.Balanced;
@@ -52,6 +54,7 @@ internal sealed class CommandLine
                 case "--threads": threads = ParseThreads(Next(it, arg)); break;
                 case "--max-size": maxDimension = ParseMaxSize(Next(it, arg)); break;
                 case "--encoder": backend = ParseBackend(Next(it, arg)); break;
+                case "--mips": mipMode = ParseMipMode(Next(it, arg)); break;
                 case "--strategy": strategy = ParseStrategy(Next(it, arg)); break;
                 case "--quality": quality = ParseQuality(Next(it, arg)); break;
                 default:
@@ -69,12 +72,19 @@ internal sealed class CommandLine
             Path = path, Output = output, Backup = backup, Original = original,
             Threads = threads, DryRun = dryRun, NoCollapse = noCollapse, NoDedup = noDedup,
             Strategy = strategy, Quality = quality, MaxDimension = maxDimension,
-            Backend = backend,
+            Backend = backend, MipMode = mipMode,
         };
     }
 
     private static string Next(IEnumerator<string> it, string option) =>
         it.MoveNext() ? it.Current : throw new ArgumentException($"{option} requires a value.");
+
+    private static MipMode ParseMipMode(string value) => value.ToLowerInvariant() switch
+    {
+        "keep" or "chain" or "keep-chain" => MipMode.KeepChain,
+        "single" or "one" or "drop-chain" => MipMode.SingleLevel,
+        _ => throw new ArgumentException($"Unknown mip mode '{value}'. Use keep or single."),
+    };
 
     private static EncoderBackend ParseBackend(string value) => value.ToLowerInvariant() switch
     {

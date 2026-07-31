@@ -55,7 +55,7 @@ internal static class Program
             Console.WriteLine($"  {type.Count,4} x {type.TypeName}");
 
         var plan = OptimizationPlan.Build(bundle, gpu, options.Strategy, !options.NoCollapse,
-                                          maxDimension: options.MaxDimension);
+                                          maxDimension: options.MaxDimension, mipMode: options.MipMode);
         plan.Deduplicate = !options.NoDedup;
         PrintPlan(plan);
         return 0;
@@ -249,6 +249,11 @@ internal static class Program
           --backup <dir>      backup directory for in-place edits (default: ./backup)
           --no-collapse       keep solid-colour textures at their original dimensions
           --no-dedup          write duplicate payloads separately instead of sharing them
+          --mips keep|single  what to do with a mipmapped texture's chain.
+                              keep (default) discards only the levels above the cap
+                              and leaves the texture mipmapped; single keeps one
+                              level and nothing else, which is smaller but brings
+                              back shimmering when the texture is minified
           --max-size <n>      cap texture dimensions at n (power of two); larger ones are
                               halved until they fit. The plan reports the measured
                               detail cost per texture before you commit.

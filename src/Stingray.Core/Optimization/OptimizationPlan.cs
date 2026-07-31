@@ -28,7 +28,16 @@ public sealed class TexturePlanItem
     /// </summary>
     public int MipLevelsToDrop { get; set; }
 
-    public bool IsMipDrop => MipLevelsToDrop > 0;
+    /// <summary>Levels remaining after the slice. 1 means the chain is gone.</summary>
+    public int TargetMipCount { get; set; } = 1;
+
+    /// <summary>
+    /// True when the payload is sliced out of the existing chain rather than
+    /// re-encoded. Any mipmapped texture takes this path: re-encoding one would
+    /// mean rebuilding the whole chain, and treating its payload as a single
+    /// surface would silently discard every level below the first.
+    /// </summary>
+    public bool IsMipDrop => Texture.MipMapCount > 1;
 
     public long CurrentSize => Texture.GpuSize;
 
@@ -38,7 +47,10 @@ public sealed class TexturePlanItem
         {
             if (!Include) return CurrentSize;
             if (!IsMipDrop) return TargetFormat.SurfaceSize(TargetWidth, TargetHeight);
-            return Texture.MipChain.Skip(MipLevelsToDrop).Sum();
+
+            // A mipmapped texture costs the sum of the levels that survive, not
+            // the size of its largest one.
+            return Texture.MipChain.Skip(MipLevelsToDrop).Take(TargetMipCount).Sum();
         }
     }
     public long Saving => CurrentSize - PredictedSize;
@@ -55,6 +67,7 @@ public sealed class TexturePlanItem
         TargetWidth = Recommendation.Width;
         TargetHeight = Recommendation.Height;
         MipLevelsToDrop = Recommendation.MipLevelsToDrop;
+        TargetMipCount = Recommendation.TargetMipCount;
         Include = true;
     }
 }
@@ -199,6 +212,7 @@ public sealed class OptimizationPlan
         bool collapseSolidColours = true,
         IProgress<PlanProgress>? progress = null,
         int maxDimension = 0,
+        MipMode mipMode = MipMode.KeepChain,
         CancellationToken cancellationToken = default)
     {
         var items = new List<TexturePlanItem>();
@@ -250,7 +264,7 @@ public sealed class OptimizationPlan
 
             var recommendation = TextureAnalyzer.Recommend(
                 analysis, texture.Width, texture.Height, strategy, collapseSolidColours,
-                maxDimension, texture.SourceFormat, texture.MipMapCount);
+                maxDimension, texture.SourceFormat, texture.MipMapCount, mipMode);
 
             var item = new TexturePlanItem
             {

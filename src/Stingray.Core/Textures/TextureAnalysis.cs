@@ -84,6 +84,25 @@ public sealed class TextureAnalysis
     }
 }
 
+/// <summary>What to do with a mip chain when a texture is shrunk.</summary>
+public enum MipMode
+{
+    /// <summary>
+    /// Discard the top levels only, keeping the rest of the chain. The texture
+    /// stays mipmapped, so it will not shimmer at distance and still samples
+    /// efficiently. The tail costs about a third of the level above it.
+    /// </summary>
+    KeepChain,
+
+    /// <summary>
+    /// Keep one level and nothing else — the largest that fits the cap. Smaller
+    /// than <see cref="KeepChain"/> by roughly a quarter, but the texture is no
+    /// longer mipmapped, which brings back shimmering when it is minified and
+    /// costs texture-cache efficiency.
+    /// </summary>
+    SingleLevel,
+}
+
 /// <summary>How aggressively to trade quality for size when recommending formats.</summary>
 public enum OptimizationStrategy
 {
@@ -113,6 +132,9 @@ public sealed class FormatRecommendation
     /// the author's own pixels for every level that survives.
     /// </summary>
     public int MipLevelsToDrop { get; init; }
+
+    /// <summary>How many levels remain. 1 means the chain is gone.</summary>
+    public int TargetMipCount { get; init; } = 1;
 
     public long PredictedSize => Format.SurfaceSize(Width, Height);
 }

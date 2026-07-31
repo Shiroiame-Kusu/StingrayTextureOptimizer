@@ -75,7 +75,8 @@ public static class BundleOptimizer
             {
                 var chain = item.Texture.MipChain;
                 var skip = chain.Take(item.MipLevelsToDrop).Sum();
-                encoded[entry.FileId] = surface.AsSpan((int)skip).ToArray();
+                var keep = chain.Skip(item.MipLevelsToDrop).Take(item.TargetMipCount).Sum();
+                encoded[entry.FileId] = surface.AsSpan((int)skip, (int)keep).ToArray();
                 continue;
             }
 
@@ -168,9 +169,7 @@ public static class BundleOptimizer
             var payload = image.AsSpan((int)entry.Offset, (int)entry.Size);
             // For a sliced chain the DDS "linear size" describes the new level 0,
             // not the whole payload, and the level count shrinks with it.
-            var mips = item.IsMipDrop
-                ? item.Texture.MipMapCount - item.MipLevelsToDrop
-                : (int?)null;
+            var mips = item.IsMipDrop ? item.TargetMipCount : (int?)null;
             var linearSize = item.IsMipDrop
                 ? item.TargetFormat.SurfaceSize(item.TargetWidth, item.TargetHeight)
                 : newOffsets[entry.FileId].Size;

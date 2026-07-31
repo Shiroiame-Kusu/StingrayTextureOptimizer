@@ -58,6 +58,13 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
+                    ToolTip.Tip="What to do with a texture that carries a mip chain.&#x0a;Keep smaller levels: discard only the levels above the cap. The texture stays mipmapped, so it will not shimmer at distance.&#x0a;Keep one level only: throw the chain away and keep a single image. Smaller, but minified surfaces shimmer and sample less efficiently.&#x0a;Either way the pixels are the author's own: nothing is re-encoded.">
+          <TextBlock Text="Mip levels" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding MipModes}" SelectedItem="{Binding MipSelection}"
+                    MinWidth="170" IsEnabled="{Binding !IsBusy}" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="6"
                     ToolTip.Tip="Which compressor does the work.&#x0a;Fast uses the bundled Compressonator CMP_Core library: several times quicker and slightly better quality.&#x0a;Portable uses the pure-managed encoder, which always works.&#x0a;Automatic prefers Fast and falls back to Portable when the native library is missing.">
           <TextBlock Text="Encoder" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Backends}" SelectedItem="{Binding Encoder}"

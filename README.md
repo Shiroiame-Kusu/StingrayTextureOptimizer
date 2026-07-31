@@ -317,25 +317,41 @@ only genuinely lossy option.** Every affected texture reports its measured detai
 cost, so you can untick the ones that matter. See
 [Resizing](#resizing-and-whether-it-will-look-blurry).
 
-**Textures that carry a mip chain are shrunk by discarding their top levels
-rather than by re-encoding.** Every level that survives is the author's own data,
-already compressed, so nothing is resampled and no generation loss is added — it
-is a byte slice, and it takes well under a second for a whole bundle. The DDS
-header is rewritten to describe the shorter chain.
+**Textures that carry a mip chain are shrunk by discarding levels rather than by
+re-encoding.** Every level that survives is the author's own data, already
+compressed, so nothing is resampled and no generation loss is added — it is a
+byte slice, and it takes well under a second for a whole bundle. The DDS header
+is rewritten to describe what is left.
 
 That matters more than it sounds. A well-made mod may already be entirely BC7,
-with nothing to recompress and no duplicate payloads, and still cost a great
-deal of video memory because its textures carry full chains that are all
-resident. One real 205.6 MiB mod saved nothing at all before this and now:
+with nothing to recompress and no duplicate payloads, and still cost a great deal
+of video memory because its textures carry full chains that are all resident.
 
-| Cap | Disk | GPU memory |
+### Mip levels — `--mips keep|single` (GUI: *Mip levels*)
+
+| Value | GUI label | What it keeps |
 | --- | --- | --- |
-| none | 205.6 → 166.0 MiB | 205.6 → 178.6 MiB |
-| `--max-size 2048` | 205.6 → 139.3 MiB | 205.6 → **151.9 MiB** |
-| `--max-size 1024` | 205.6 → 112.0 MiB | 205.6 → **116.6 MiB** |
+| `keep` *(default)* | Keep smaller levels | Discards only the levels above the cap. The texture stays mipmapped. |
+| `single` | Keep one level only | Keeps the largest level that fits and throws the rest away. |
 
-Streamed textures are still skipped: their top levels live in the `.stream` file,
-so slicing `gpu_resources` alone would desynchronise the two.
+Measured on a real 205.6 MiB mod that was already fully BC7 — before this it
+saved nothing at all:
+
+| Cap | `keep` | `single` |
+| --- | --- | --- |
+| none | 205.6 MiB | 178.6 MiB |
+| 2048 | 165.6 MiB | 148.6 MiB |
+| 1024 | **117.6 MiB** | **112.6 MiB** |
+| 512 | 103.6 MiB | 102.1 MiB |
+
+`single` is only about 4% smaller, because the levels below the top one add up to
+roughly a third of it. For that it gives up mipmapping altogether, which brings
+back shimmering on minified surfaces and costs texture-cache efficiency. **Prefer
+`keep`**; reach for `single` only when you are genuinely out of memory and the
+texture is something like a UI element that is never minified.
+
+Streamed textures are skipped under both: their top levels live in the `.stream`
+file, so slicing `gpu_resources` alone would desynchronise the two.
 
 ### Collapse solid colours — `--no-collapse` disables (GUI: *Collapse solid colours*)
 

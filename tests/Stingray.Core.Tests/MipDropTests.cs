@@ -101,6 +101,78 @@ public class MipDropTests
     }
 
     [Fact]
+    public void SingleLevelKeepsExactlyOneLevelAndItIsTheOriginalBytes()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        byte[] before;
+        using (var gpu = GpuResourceFile.Open(bundle.GpuResourcePath))
+        {
+            before = gpu.Read(bundle.Textures.Single().GpuOffset, bundle.Textures.Single().GpuSize);
+            var plan = OptimizationPlan.Build(bundle, gpu, maxDimension: 64,
+                                              mipMode: MipMode.SingleLevel);
+            var item = Assert.Single(plan.Textures);
+            Assert.Equal(2, item.MipLevelsToDrop);
+            Assert.Equal(1, item.TargetMipCount);
+            BundleOptimizer.Apply(plan, gpu, bundle.Path, bundle.GpuResourcePath, Fast);
+        }
+
+        var rebuilt = Bundle.Load(fixture.BundlePath);
+        var entry = rebuilt.Textures.Single();
+        Assert.True(TextureResource.TryCreate(rebuilt, entry, out var texture));
+
+        Assert.Equal(1, texture!.Header.MipMapCount);
+        Assert.Equal(DxgiFormat.Bc7Unorm.SurfaceSize(64, 64), entry.GpuSize);
+
+        // Exactly level 2 of the original chain, byte for byte.
+        var chain = DxgiFormat.Bc7Unorm.MipChain(256, 256, 9);
+        var start = (int)chain.Take(2).Sum();
+        using var newGpu = GpuResourceFile.Open(rebuilt.GpuResourcePath);
+        Assert.Equal(before.AsSpan(start, (int)chain[2]).ToArray(),
+                     newGpu.Read(entry.GpuOffset, entry.GpuSize));
+    }
+
+    [Fact]
+    public void KeepChainWithNoCapChangesNothing()
+    {
+        // Regression: a mipmapped texture with no cap was sized as though only
+        // level 0 survived, so it looked like a saving and the optimiser would
+        // have re-encoded it into a single surface, silently losing the chain.
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+        var plan = OptimizationPlan.Build(bundle, gpu, mipMode: MipMode.KeepChain);
+
+        Assert.Empty(plan.Textures);
+        Assert.Equal(plan.CurrentGpuFootprint, plan.PredictedGpuFootprint);
+    }
+
+    [Fact]
+    public void SingleLevelIsSmallerThanKeepingTheChain()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+
+        var chain = OptimizationPlan.Build(bundle, gpu, maxDimension: 64, mipMode: MipMode.KeepChain);
+        var single = OptimizationPlan.Build(bundle, gpu, maxDimension: 64, mipMode: MipMode.SingleLevel);
+
+        Assert.True(single.PredictedGpuFootprint < chain.PredictedGpuFootprint);
+        // The tail below the top level is about a third of it, so the gap is real
+        // but modest -- which is the trade-off the option exists to expose.
+        Assert.True(single.PredictedGpuFootprint > chain.PredictedGpuFootprint * 0.6);
+    }
+
+    [Fact]
     public void StreamedTexturesAreLeftAlone()
     {
         // Their top levels live in .stream, so slicing gpu_resources alone would

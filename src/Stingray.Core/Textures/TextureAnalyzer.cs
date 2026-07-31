@@ -90,7 +90,8 @@ public static class TextureAnalyzer
         bool collapseSolidColours = true,
         int maxDimension = 0,
         DxgiFormat sourceFormat = DxgiFormat.Unknown,
-        int mipCount = 1)
+        int mipCount = 1,
+        MipMode mipMode = MipMode.KeepChain)
     {
         // A texture that carries a mip chain can be shrunk by discarding its top
         // levels: the ones that remain are the author's own pixels, already
@@ -99,15 +100,25 @@ public static class TextureAnalyzer
         if (mipCount > 1 && sourceFormat.IsBlockCompressed())
         {
             var drop = DxgiFormatInfo.LevelsToDrop(width, height, mipCount, maxDimension);
-            if (drop == 0)
+            var collapsing = mipMode == MipMode.SingleLevel && mipCount > 1;
+
+            if (drop == 0 && !collapsing)
                 return new FormatRecommendation
                 {
                     Format = sourceFormat,
                     Width = width,
                     Height = height,
+                    TargetMipCount = mipCount,
                     IsLossless = true,
                     Rationale = $"already compressed with {mipCount} mip levels; left as is",
                 };
+
+            var remaining = collapsing ? 1 : mipCount - drop;
+            var how = collapsing
+                ? drop == 0
+                    ? $"keeping only the full-size level and discarding the other {mipCount - 1}"
+                    : $"keeping only the largest level that fits, discarding the other {mipCount - 1}"
+                : $"dropping the top {drop} mip level(s), keeping the remaining {remaining}";
 
             return new FormatRecommendation
             {
@@ -115,9 +126,9 @@ public static class TextureAnalyzer
                 Width = Math.Max(1, width >> drop),
                 Height = Math.Max(1, height >> drop),
                 MipLevelsToDrop = drop,
+                TargetMipCount = remaining,
                 IsLossless = false,
-                Rationale = $"dropping the top {drop} mip level(s); the rest is kept "
-                          + "exactly as authored, with no re-encoding",
+                Rationale = $"{how}; kept exactly as authored, with no re-encoding",
             };
         }
 
