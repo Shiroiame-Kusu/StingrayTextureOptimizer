@@ -116,18 +116,58 @@ stingray-tex optimize mymod.patch_0 --output ./out
 stingray-tex verify mymod.patch_0 --original backup/mymod.patch_0
 ```
 
-| Option | Meaning |
-| --- | --- |
-| `--strategy balanced\|quality\|smallest` | BC7 everywhere vs BC1 where alpha is unused |
-| `--quality fast\|balanced\|best` | Encoder effort |
-| `--threads N` | Defaults to CPU count − 4 |
-| `--no-collapse` | Keep solid-colour textures at original dimensions |
-| `--no-dedup` | Write duplicate payloads separately instead of sharing them |
-| `--max-size N` | Cap texture dimensions at N; larger ones are halved until they fit |
-| `--dry-run` | Analyse only |
+## Options
 
-The thread default deliberately leaves cores free. Saturating every core with a
-BC7 encode makes a desktop session unusable.
+The same settings appear in the GUI toolbar and on the command line.
+
+### Format — `--strategy` (GUI: *Format*)
+
+Which block format each texture is encoded to. Affects both size and quality.
+
+| Value | GUI label | Behaviour |
+| --- | --- | --- |
+| `balanced` *(default)* | Balanced | BC1 where alpha carries no information, BC7 where it does |
+| `quality` | Best quality | BC7 everywhere; never BC1 for real image content |
+| `smallest` | Smallest size | BC1 wherever alpha carries no information |
+
+BC1 is half the size of BC7 but has 5:6:5 colour endpoints, so it bands on
+gradients. BC7 reproduces any 8-bit RGBA nearly exactly.
+
+### Effort — `--quality` (GUI: *Effort*)
+
+`fast` | `balanced` *(default)* | `best`. How hard the compressor searches for
+the best encoding. **This does not change the output size** — only how close the
+result is to the source, and how long it takes.
+
+### Threads — `--threads`
+
+Encoder worker threads. Defaults to **CPU count − 4**, deliberately leaving cores
+free: saturating every core with a BC7 encode makes a desktop session unusable.
+
+### Max size — `--max-size N` (GUI: *Max size*)
+
+Halve any texture larger than N until it fits. **Off by default — this is the
+only genuinely lossy option.** Every affected texture reports its measured detail
+cost, so you can untick the ones that matter. See
+[Resizing](#resizing-and-whether-it-will-look-blurry).
+
+### Collapse solid colours — `--no-collapse` disables (GUI: *Collapse solid colours*)
+
+A texture whose every pixel is identical is rewritten at 16×16. Visually
+lossless, because a constant texture samples the same at any resolution. Saves
+**both** file size and video memory. Only disable it if a shader reads the
+texture with `textureSize()` or absolute `texelFetch` coordinates.
+
+### Share duplicates — `--no-dedup` disables (GUI: *Share duplicates*)
+
+Byte-identical payloads are stored once and referenced by every entry that uses
+them. Lossless, and usually the largest saving in an already-compressed bundle.
+**Shrinks the file only** — see [File size is not video
+memory](#file-size-is-not-video-memory).
+
+### `--dry-run`
+
+Analyse and report without writing anything.
 
 ## Deduplication
 

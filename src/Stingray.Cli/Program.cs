@@ -65,9 +65,12 @@ internal static class Program
 
         // Deduplication alone can be a large saving even when every texture is
         // already compressed, so an empty texture list is not "nothing to do".
-        if (plan.Textures.Count == 0 && (options.NoDedup || plan.DuplicateEntryCount == 0))
+        // Only worth writing if something actually shrinks.
+        var savesDisk = plan.PredictedGpuSize < plan.CurrentGpuSize;
+        var savesMemory = plan.PredictedGpuFootprint < plan.CurrentGpuFootprint;
+        if (!savesDisk && !savesMemory)
         {
-            Console.WriteLine("\nNothing to do.");
+            Console.WriteLine("\nNothing to do: this bundle is already optimised.");
             return 0;
         }
 
@@ -158,7 +161,7 @@ internal static class Program
         Console.WriteLine($"gpu   {Human(plan.CurrentGpuFootprint),10} -> {Human(plan.PredictedGpuFootprint),10}"
                         + $"   (saves {Human(plan.PredictedFootprintSaving)})");
 
-        if (plan.PredictedGpuFootprint > plan.PredictedGpuSize)
+        if (plan.DuplicateEntryCount > 0)
             Console.WriteLine("      sharing duplicates shrinks the file but not video memory: "
                             + "each entry is still its own GPU resource.");
     }

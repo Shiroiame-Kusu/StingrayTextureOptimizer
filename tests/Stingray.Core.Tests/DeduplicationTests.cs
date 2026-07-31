@@ -149,6 +149,37 @@ public class DeduplicationTests
     }
 
     [Fact]
+    public void AlreadySharedPayloadsAreNotCountedAsWaste()
+    {
+        // Regression: duplicate *content* was reported as waste without checking
+        // whether those entries already point at one shared region. On a bundle
+        // that had already been optimised this claimed a saving of tens of MiB
+        // while simultaneously reporting a total saving of zero.
+        using var fixture = new SyntheticBundle()
+            .AddOpaqueAsset(65536, seed: 12)
+            .AddOpaqueAsset(65536, seed: 12)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using (var gpu = GpuResourceFile.Open(bundle.GpuResourcePath))
+        {
+            var first = OptimizationPlan.Build(bundle, gpu);
+            Assert.Equal(1, first.DuplicateEntryCount);
+            Assert.Equal(65536, first.RedundantBytes);
+            BundleOptimizer.Apply(first, gpu, bundle.Path, bundle.GpuResourcePath, Fast);
+        }
+
+        // Second pass: the duplicate now shares a region, so nothing is reclaimable.
+        var rebuilt = Bundle.Load(fixture.BundlePath);
+        using var newGpu = GpuResourceFile.Open(rebuilt.GpuResourcePath);
+        var second = OptimizationPlan.Build(rebuilt, newGpu);
+
+        Assert.Equal(0, second.DuplicateEntryCount);
+        Assert.Equal(0, second.RedundantBytes);
+        Assert.Equal(second.CurrentGpuSize, second.PredictedGpuSize);
+    }
+
+    [Fact]
     public void SharingShrinksTheFileButNotTheGpuFootprint()
     {
         // Each entry becomes its own GPU resource regardless of where its bytes

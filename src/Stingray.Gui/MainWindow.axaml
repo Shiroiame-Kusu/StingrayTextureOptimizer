@@ -15,41 +15,56 @@
     <Border DockPanel.Dock="Top" Padding="0,0,0,10">
       <StackPanel Orientation="Horizontal" Spacing="10">
         <Button Content="Open bundle…" Click="OnOpenClicked" IsEnabled="{Binding !IsBusy}" />
-        <TextBlock VerticalAlignment="Center" Opacity="0.75"
+        <TextBlock VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis"
+                   ToolTip.Tip="{Binding BundlePath}"
                    Text="{Binding BundlePath, FallbackValue='no bundle loaded'}" />
       </StackPanel>
     </Border>
 
     <Border DockPanel.Dock="Top" Padding="0,0,0,10">
-      <StackPanel Orientation="Horizontal" Spacing="16">
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <TextBlock Text="Strategy" VerticalAlignment="Center" />
+      <WrapPanel Orientation="Horizontal">
+        <WrapPanel.Styles>
+          <Style Selector="WrapPanel > :is(Control)">
+            <Setter Property="Margin" Value="0,0,18,6" />
+          </Style>
+        </WrapPanel.Styles>
+
+        <StackPanel Orientation="Horizontal" Spacing="6"
+                    ToolTip.Tip="Which format to pick for each texture.&#x0a;Balanced: BC1 where alpha is unused, BC7 where it is not.&#x0a;Best quality: BC7 everywhere, never BC1 for real image content.&#x0a;Smallest size: BC1 wherever alpha carries no information.">
+          <TextBlock Text="Format" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Strategies}" SelectedItem="{Binding Strategy}"
-                    MinWidth="150" IsEnabled="{Binding !IsBusy}" />
+                    MinWidth="140" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="6">
-          <TextBlock Text="Encoder quality" VerticalAlignment="Center" />
+
+        <StackPanel Orientation="Horizontal" Spacing="6"
+                    ToolTip.Tip="How hard the compressor searches for the best encoding.&#x0a;Slower settings look slightly closer to the source.&#x0a;This does not change the output size.">
+          <TextBlock Text="Effort" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Qualities}" SelectedItem="{Binding Quality}"
                     MinWidth="110" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="6">
+
+        <StackPanel Orientation="Horizontal" Spacing="6"
+                    ToolTip.Tip="Encoder worker threads.&#x0a;Defaults to leaving four cores free so the desktop stays responsive during long encodes.">
           <TextBlock Text="Threads" VerticalAlignment="Center" />
           <NumericUpDown Value="{Binding ThreadCount}" Minimum="1" Maximum="{Binding MaxThreads}"
                          Increment="1" FormatString="0" MinWidth="110" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
-        <StackPanel Orientation="Horizontal" Spacing="6">
+
+        <StackPanel Orientation="Horizontal" Spacing="6"
+                    ToolTip.Tip="Halve textures larger than this until they fit.&#x0a;The only lossy option here, so it is off by default.&#x0a;Each affected texture shows its measured detail cost in the Resize cost column.">
           <TextBlock Text="Max size" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding SizeCaps}" SelectedItem="{Binding SizeCap}"
-                    MinWidth="130" IsEnabled="{Binding !IsBusy}"
-                    ToolTip.Tip="Halves oversized textures. This is the only lossy option; each affected texture reports its measured detail cost." />
+                    MinWidth="130" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
-        <CheckBox Content="Collapse solid-colour textures"
+
+        <CheckBox Content="Collapse solid colours"
                   IsChecked="{Binding CollapseSolidColours}" IsEnabled="{Binding !IsBusy}"
-                  ToolTip.Tip="A texture whose every pixel is identical is rewritten at 16x16, which is visually lossless." />
-        <CheckBox Content="Share duplicate payloads"
+                  ToolTip.Tip="A texture whose every pixel is identical is rewritten at 16x16.&#x0a;Visually lossless: a constant texture samples the same at any resolution.&#x0a;Saves both file size and video memory." />
+
+        <CheckBox Content="Share duplicates"
                   IsChecked="{Binding Deduplicate}" IsEnabled="{Binding !IsBusy}"
-                  ToolTip.Tip="Byte-identical payloads are stored once and referenced by every entry that uses them. Completely lossless." />
-      </StackPanel>
+                  ToolTip.Tip="Byte-identical payloads are stored once and referenced by every entry that uses them.&#x0a;Completely lossless, and usually the largest saving in an already-compressed bundle.&#x0a;Note: this shrinks the file only. Each entry is still its own GPU resource, so video memory is unchanged." />
+      </WrapPanel>
     </Border>
 
     <Border DockPanel.Dock="Bottom" Padding="0,10,0,0">

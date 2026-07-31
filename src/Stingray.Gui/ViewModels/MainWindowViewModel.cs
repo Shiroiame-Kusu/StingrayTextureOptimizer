@@ -17,8 +17,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<TextureItemViewModel> Textures { get; } = [];
     public ObservableCollection<SkippedTexture> Skipped { get; } = [];
 
-    public IReadOnlyList<OptimizationStrategy> Strategies { get; } = Enum.GetValues<OptimizationStrategy>();
-    public IReadOnlyList<EncodeQuality> Qualities { get; } = Enum.GetValues<EncodeQuality>();
+    public IReadOnlyList<StrategyChoice> Strategies { get; } =
+    [
+        new(OptimizationStrategy.Balanced, "Balanced"),
+        new(OptimizationStrategy.MaximumQuality, "Best quality"),
+        new(OptimizationStrategy.SmallestSize, "Smallest size"),
+    ];
+
+    public IReadOnlyList<QualityChoice> Qualities { get; } =
+    [
+        new(EncodeQuality.Fast, "Fast"),
+        new(EncodeQuality.Balanced, "Balanced"),
+        new(EncodeQuality.Best, "Best"),
+    ];
 
     public IReadOnlyList<SizeCap> SizeCaps { get; } =
     [
@@ -42,8 +53,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// and every affected texture reports its measured cost before you commit.
     /// </summary>
     [ObservableProperty] private SizeCap _sizeCap = new(0, "Keep original");
-    [ObservableProperty] private OptimizationStrategy _strategy = OptimizationStrategy.Balanced;
-    [ObservableProperty] private EncodeQuality _quality = EncodeQuality.Balanced;
+    [ObservableProperty] private StrategyChoice _strategy =
+        new(OptimizationStrategy.Balanced, "Balanced");
+    [ObservableProperty] private QualityChoice _quality =
+        new(EncodeQuality.Balanced, "Balanced");
 
     /// <summary>
     /// Defaults to leaving four cores free. Saturating every core during a long
@@ -75,8 +88,14 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// Deduplication alone can be a large win even when every texture is already
     /// compressed, so an empty texture list does not mean there is nothing to do.
     /// </summary>
+    /// <summary>
+    /// Enabled only when repacking would actually shrink something. A bundle that
+    /// has already been optimised has duplicates that share one region, which cost
+    /// nothing and cannot be reclaimed again.
+    /// </summary>
     public bool CanOptimize =>
-        !IsBusy && (Textures.Any(t => t.Include) || HasDuplicates);
+        !IsBusy && _plan is not null
+        && (PredictedSize < CurrentSize || PredictedFootprint < CurrentFootprint);
 
     public string SavingSummary => CurrentSize == 0
         ? string.Empty
@@ -103,6 +122,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         try
         {
             var cap = SizeCap.Value;
+            var strategy = Strategy.Value;
             var (plan, bundle) = await Task.Run(() =>
             {
                 var loaded = Bundle.Load(path);
@@ -111,7 +131,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                         $"No .gpu_resources companion found next to {Path.GetFileName(path)}.");
 
                 using var gpu = GpuResourceFile.Open(loaded.GpuResourcePath);
-                return (OptimizationPlan.Build(loaded, gpu, Strategy, CollapseSolidColours,
+                return (OptimizationPlan.Build(loaded, gpu, strategy, CollapseSolidColours,
                                                maxDimension: cap), loaded);
             });
 
@@ -131,15 +151,16 @@ public sealed partial class MainWindowViewModel : ObservableObject
             CurrentFootprint = plan.CurrentGpuFootprint;
             RecalculateTotals();
 
-            Status = (Textures.Count, DuplicateEntryCount) switch
-            {
-                (0, 0) => "Nothing to optimise: every texture is already efficient.",
-                (0, _) => $"Every texture is already compressed, but {DuplicateEntryCount} "
-                        + "duplicate payloads can be shared.",
-                (_, 0) => $"{Textures.Count} texture(s) can be shrunk, {Skipped.Count} skipped.",
-                _ => $"{Textures.Count} texture(s) can be shrunk and {DuplicateEntryCount} "
-                   + $"duplicate payloads shared, {Skipped.Count} skipped.",
-            };
+            Status = !CanOptimize
+                ? "Nothing to do: this bundle is already optimised."
+                : (Textures.Count, DuplicateEntryCount) switch
+                {
+                    (0, _) => $"Every texture is already compressed, but {DuplicateEntryCount} "
+                            + "duplicate payloads can be shared.",
+                    (_, 0) => $"{Textures.Count} texture(s) can be shrunk, {Skipped.Count} skipped.",
+                    _ => $"{Textures.Count} texture(s) can be shrunk and {DuplicateEntryCount} "
+                       + $"duplicate payloads shared, {Skipped.Count} skipped.",
+                };
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
         {
@@ -180,7 +201,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
                 return BundleOptimizer.Apply(
                     _plan, gpu, _bundle.Path, _bundle.GpuResourcePath,
-                    new EncodeOptions { Quality = Quality, ThreadCount = ThreadCount },
+                    new EncodeOptions { Quality = Quality.Value, ThreadCount = ThreadCount },
                     reporter, Deduplicate);
             });
 
@@ -238,7 +259,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Re-runs analysis when the strategy changes, so the grid stays in sync.</summary>
-    partial void OnStrategyChanged(OptimizationStrategy value)
+    partial void OnStrategyChanged(StrategyChoice value)
     {
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }
@@ -258,6 +279,18 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }
+}
+
+/// <summary>An optimisation strategy, with the label shown in the dropdown.</summary>
+public sealed record StrategyChoice(OptimizationStrategy Value, string Label)
+{
+    public override string ToString() => Label;
+}
+
+/// <summary>An encoder effort level, with the label shown in the dropdown.</summary>
+public sealed record QualityChoice(EncodeQuality Value, string Label)
+{
+    public override string ToString() => Label;
 }
 
 /// <summary>A maximum-dimension choice, with the label shown in the dropdown.</summary>

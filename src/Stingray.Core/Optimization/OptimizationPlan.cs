@@ -72,32 +72,27 @@ public sealed class OptimizationPlan
     public bool Deduplicate { get; set; } = true;
 
     /// <summary>
-    /// Bytes currently occupied by payloads that are byte-identical to an earlier
-    /// one. Mods often ship the same texture under many ids.
+    /// Groups of entries whose payloads are byte-identical, with how many distinct
+    /// regions each group currently occupies.
     /// </summary>
-    public long RedundantBytes
-    {
-        get
-        {
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            long redundant = 0;
-            foreach (var entry in Bundle.GpuBackedFiles.OrderBy(f => f.GpuOffset))
-                if (_contentHashes.TryGetValue(entry.FileId, out var hash) && !seen.Add(hash))
-                    redundant += entry.GpuSize;
-            return redundant;
-        }
-    }
+    /// <remarks>
+    /// Entries that repeat content but already point at one shared region cost
+    /// nothing, which is exactly what an already-optimised bundle looks like.
+    /// Counting those as waste would report a saving that repacking cannot deliver.
+    /// </remarks>
+    private IEnumerable<(int DistinctRegions, uint Size)> DuplicateGroups =>
+        Bundle.GpuBackedFiles
+            .Where(e => _contentHashes.ContainsKey(e.FileId))
+            .GroupBy(e => _contentHashes[e.FileId], StringComparer.Ordinal)
+            .Select(g => (g.Select(e => e.GpuOffset).Distinct().Count(), g.First().GpuSize))
+            .Where(g => g.Item1 > 1);
 
-    public int DuplicateEntryCount
-    {
-        get
-        {
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            return Bundle.GpuBackedFiles
-                .OrderBy(f => f.GpuOffset)
-                .Count(e => _contentHashes.TryGetValue(e.FileId, out var h) && !seen.Add(h));
-        }
-    }
+    /// <summary>Bytes repacking would actually reclaim by sharing payloads.</summary>
+    public long RedundantBytes =>
+        DuplicateGroups.Sum(g => (long)(g.DistinctRegions - 1) * g.Size);
+
+    /// <summary>Entries that would stop occupying a region of their own.</summary>
+    public int DuplicateEntryCount => DuplicateGroups.Sum(g => g.DistinctRegions - 1);
 
     public Bundle Bundle { get; }
     public IReadOnlyList<TexturePlanItem> Textures { get; }
