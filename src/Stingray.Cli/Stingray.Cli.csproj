@@ -3,6 +3,9 @@
     <OutputType>Exe</OutputType>
     <AssemblyName>stingray-tex</AssemblyName>
     <RootNamespace>Stingray.Cli</RootNamespace>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <StripSymbols>true</StripSymbols>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Stingray.Core/Stingray.Core.csproj" />

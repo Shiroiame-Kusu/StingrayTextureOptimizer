@@ -1,16 +1,43 @@
+# SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
+# SPDX-License-Identifier: GPL-3.0-or-later
+
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
-  build:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - run: dotnet restore
+      - run: dotnet build --no-restore -c Release
+      - run: dotnet test --no-build -c Release --verbosity normal
+
+  publish:
+    name: Publish ${{ matrix.rid }}
+    needs: test
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+          - { os: ubuntu-latest,  rid: linux-x64, archive: tar }
+          - { os: windows-latest, rid: win-x64,   archive: zip }
+          - { os: macos-13,       rid: osx-x64,   archive: tar }
+          - { os: macos-latest,   rid: osx-arm64, archive: tar }
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -20,11 +47,89 @@ jobs:
         with:
           dotnet-version: '10.0.x'
 
-      - name: Restore
-        run: dotnet restore
+      # Native AOT on Linux links with clang against zlib.
+      - name: Install AOT prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
 
-      - name: Build
-        run: dotnet build --no-restore -c Release
+      - name: Derive version
+        id: version
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "value=${GITHUB_REF#refs/tags/v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=0.0.0-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+          fi
 
-      - name: Test
-        run: dotnet test --no-build -c Release --verbosity normal
+      # The CLI is fully Native AOT: one ~2 MB binary, no runtime to install,
+      # about 1 ms of startup.
+      - name: Publish CLI (Native AOT)
+        run: >
+          dotnet publish src/Stingray.Cli -c Release -r ${{ matrix.rid }}
+          -p:Version=${{ steps.version.outputs.value }} -o out/cli
+
+      # The GUI cannot be AOT'd: Avalonia.Controls.DataGrid is neither trim- nor
+      # AOT-clean (IL2104/IL3053), so it ships self-contained instead.
+      - name: Publish GUI (self-contained)
+        run: >
+          dotnet publish src/Stingray.Gui -c Release -r ${{ matrix.rid }}
+          --self-contained true -p:PublishSingleFile=true
+          -p:Version=${{ steps.version.outputs.value }} -o out/gui
+
+      - name: Stage release layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="stingray-tex-${{ steps.version.outputs.value }}-${{ matrix.rid }}"
+          mkdir -p "$stage"
+          # Binaries only; debug symbols are not shipped.
+          find out/cli out/gui -maxdepth 1 -type f \
+            ! -name '*.pdb' ! -name '*.dbg' ! -name '*.dwarf' \
+            -exec cp {} "$stage/" \;
+          cp LICENSE README.md "$stage/"
+          echo "STAGE=$stage" >> "$GITHUB_ENV"
+          ls -la "$stage"
+
+      - name: Archive (tar.gz)
+        if: matrix.archive == 'tar'
+        run: tar -czf "$STAGE.tar.gz" "$STAGE"
+
+      - name: Archive (zip)
+        if: matrix.archive == 'zip'
+        shell: pwsh
+        run: Compress-Archive -Path $env:STAGE -DestinationPath "$env:STAGE.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stingray-tex-${{ matrix.rid }}
+          path: |
+            ${{ env.STAGE }}.tar.gz
+            ${{ env.STAGE }}.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - run: ls -la artifacts
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
+          body: |
+            Native AOT command-line binaries and self-contained GUI builds.
+
+            `stingray-tex` needs no .NET runtime installed. The GUI ships
+            self-contained because Avalonia's DataGrid is not AOT-compatible.

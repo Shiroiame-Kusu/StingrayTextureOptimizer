@@ -6,6 +6,10 @@ obj/
 .vscode/
 .idea/
 artifacts/
+out/
+stingray-tex-*.tar.gz
+stingray-tex-*.zip
+stingray-tex-*-*/
 
 # Never commit game assets — bundles are copyrighted content.
 *.gpu_resources

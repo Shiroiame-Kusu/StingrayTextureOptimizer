@@ -56,12 +56,36 @@ Allowing a resize on top (`--max-size 2048`) takes it to **54.9 MiB**.
 
 ## Install
 
+### Prebuilt binaries
+
+Grab an archive from [Releases](../../releases). Nothing else to install — not
+even a .NET runtime.
+
+| Platform | Archive |
+| --- | --- |
+| Linux x64 | `stingray-tex-<version>-linux-x64.tar.gz` |
+| Windows x64 | `stingray-tex-<version>-win-x64.zip` |
+| macOS Intel | `stingray-tex-<version>-osx-x64.tar.gz` |
+| macOS Apple Silicon | `stingray-tex-<version>-osx-arm64.tar.gz` |
+
+Each contains `stingray-tex` (the CLI) and `stingray-tex-gui`.
+
+The CLI is compiled with **Native AOT**: a single ~2 MB native binary with no
+runtime dependency and roughly 1 ms of startup. The GUI ships self-contained
+instead — Avalonia's `DataGrid` is neither trim- nor AOT-clean, so forcing AOT
+on it would produce a binary with silently broken bindings.
+
+### From source
+
 Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 
 ```sh
-git clone <your-fork-url>
+git clone https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer.git
 cd StingrayTextureOptimizer
 dotnet build -c Release
+
+# optional: a Native AOT CLI build (needs clang and zlib on Linux)
+dotnet publish src/Stingray.Cli -c Release -r linux-x64
 ```
 
 ## Use
