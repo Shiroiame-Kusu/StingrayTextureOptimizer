@@ -29,11 +29,23 @@ across a million interop transitions.
 Requires CMake and a C++17 compiler.
 
 ```sh
-git clone --depth 1 https://github.com/GPUOpen-Tools/compressonator.git /tmp/compressonator
+./native/build.sh      # native\build.ps1 on Windows
+```
+
+That fetches the two directories it needs from the Compressonator repo into
+`external/`, builds into `build/native/`, and from then on `dotnet build`
+copies the result into every project output automatically.
+
+Doing it by hand:
+
+```sh
 cmake -S native -B build/native -DCMAKE_BUILD_TYPE=Release \
-      -DCOMPRESSONATOR_SOURCE=/tmp/compressonator
+      -DCOMPRESSONATOR_SOURCE=/absolute/path/to/compressonator
 cmake --build build/native --config Release
 ```
+
+`COMPRESSONATOR_SOURCE` must be **absolute**: CMake resolves relative source
+paths against this directory, not against wherever you ran it.
 
 Put the resulting `stingray_cmp.so` / `.dll` next to the executable, or in a
 `tools/` folder beside it, or point `STINGRAY_CMP_LIBRARY` at it.

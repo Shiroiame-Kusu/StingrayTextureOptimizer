@@ -93,11 +93,15 @@
           <ProgressBar Value="{Binding Progress}" Maximum="100" Height="4" />
           <TextBlock Text="{Binding ProgressText}" Opacity="0.7" FontSize="11" />
         </StackPanel>
-        <TextBlock Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0"
+        <!-- Column 0 is star-sized and column 1 auto, so the notice wraps into
+             whatever the encoder status leaves. They must not share a cell. -->
+        <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,0"
                    Opacity="0.5" FontSize="11" TextWrapping="Wrap"
                    Text="Stingray Texture Optimizer, Copyright (C) 2026 Shiroiame-Kusu. Free software with ABSOLUTELY NO WARRANTY, redistributable under the GNU GPL v3 or later. See LICENSE." />
         <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Opacity="0.5" FontSize="11"
-                   HorizontalAlignment="Right" Text="{Binding BackendStatus}" />
+                   VerticalAlignment="Bottom" HorizontalAlignment="Right"
+                   ToolTip.Tip="The fast encoder is a small native library bundled with release downloads. Building from source? See native/README.md."
+                   Text="{Binding BackendStatus}" />
       </Grid>
     </Border>
 

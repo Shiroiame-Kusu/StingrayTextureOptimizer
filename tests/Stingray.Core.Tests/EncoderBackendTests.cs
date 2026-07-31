@@ -86,6 +86,22 @@ public class EncoderBackendTests
     }
 
     [Fact]
+    public void CutoutAlphaSurvivesWhicheverBackendIsUsed()
+    {
+        // CMP_Core silently drops BC1 punchthrough alpha, so the native backend
+        // declines that case and Auto must fall back rather than emit an opaque
+        // mask. This has to hold with or without the shim installed.
+        var cutout = Surface(16, 16, (x, _) => (200, 40, 40, (byte)(x < 8 ? 0 : 255)));
+        var bc1 = TextureEncoder.Encode(cutout, 16, 16, DxgiFormat.R8G8B8A8Unorm,
+                                        16, 16, DxgiFormat.Bc1Unorm,
+                                        new EncodeOptions { Backend = EncoderBackend.Auto, ThreadCount = 2 });
+        var back = TextureDecoder.Decode(bc1, 16, 16, DxgiFormat.Bc1Unorm);
+
+        Assert.Equal(0, back[3]);
+        Assert.Equal(255, back[(8 * 4) + 3]);
+    }
+
+    [Fact]
     public void BackendStatusExplainsItself() =>
         Assert.False(string.IsNullOrWhiteSpace(TextureEncoder.BackendStatus));
 }

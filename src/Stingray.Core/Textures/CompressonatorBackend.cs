@@ -112,12 +112,21 @@ public sealed partial class CompressonatorBackend : IBlockEncoderBackend
             throw new InvalidOperationException($"Compressonator is unusable: {UnavailableReason}.");
 
         var code = ToFormatCode(target);
+        var needsAlpha = HasTransparency(rgba);
+
+        // CMP_Core cannot currently produce BC1 with punchthrough alpha: its
+        // bc1_encode_kernel.cpp passes a hard-coded 0 where the alpha threshold
+        // should go, with an upstream comment noting the real value is disabled
+        // over a bug. SetAlphaThresholdBC1 therefore has no effect and a cutout
+        // mask would come back fully opaque. Decline it so Auto falls back to the
+        // managed encoder, which handles it correctly.
+        if (needsAlpha && target is DxgiFormat.Bc1Unorm or DxgiFormat.Bc1UnormSrgb)
+            throw new NotSupportedException(
+                "CMP_Core cannot encode BC1 with 1-bit alpha (upstream bug); "
+              + "use the managed encoder for cutout masks.");
+
         var expected = target.SurfaceSize(width, height);
         var output = new byte[expected];
-
-        // BC1 needs an explicit threshold to keep its single alpha bit, and BC7
-        // encodes alpha only when told the image has any.
-        var needsAlpha = HasTransparency(rgba);
 
         int result;
         fixed (byte* src = rgba)

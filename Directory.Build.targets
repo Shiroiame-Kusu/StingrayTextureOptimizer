@@ -1,0 +1,18 @@
+<Project>
+  <!--
+    Copies the native encoder shim into every project's output when it has been
+    built, so `dotnet run` picks up the fast encoder instead of silently falling
+    back. Build it with native/build.sh (or build.ps1); without it the managed
+    encoder is used and everything still works.
+
+    The paths are globs on purpose: a literal Include would create an item even
+    when the file is absent, and the copy would then fail.
+  -->
+  <ItemGroup>
+    <NativeShim Include="$(MSBuildThisFileDirectory)build/native/**/stingray_cmp.so" />
+    <NativeShim Include="$(MSBuildThisFileDirectory)build/native/**/stingray_cmp.dll" />
+    <NativeShim Include="$(MSBuildThisFileDirectory)build/native/**/stingray_cmp.dylib" />
+    <None Include="@(NativeShim)" Link="%(Filename)%(Extension)"
+          CopyToOutputDirectory="PreserveNewest" Visible="false" />
+  </ItemGroup>
+</Project>

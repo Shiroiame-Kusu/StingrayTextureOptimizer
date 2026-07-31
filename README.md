@@ -127,11 +127,20 @@ Requires the [.NET 10 SDK](https://dotnet.microsoft.com/download).
 ```sh
 git clone https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer.git
 cd StingrayTextureOptimizer
+
+# optional but recommended: builds the fast encoder (needs cmake and a C++ compiler).
+# Run once; dotnet build then copies it into the app output automatically.
+./native/build.sh          # native\build.ps1 on Windows
+
 dotnet build -c Release
 
 # optional: a Native AOT CLI build (needs clang and zlib on Linux)
 dotnet publish src/Stingray.Cli -c Release -r linux-x64
 ```
+
+Without the first step the tool still works, just on the slower managed
+encoder — the footer of the GUI and the `analyze` output both say which one is
+in use.
 
 ## Use
 

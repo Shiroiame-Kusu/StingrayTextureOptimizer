@@ -21,3 +21,5 @@ stingray-tex-*-*/
 stingray_cmp.so
 stingray_cmp.dll
 stingray_cmp.dylib
+build/
+external/
