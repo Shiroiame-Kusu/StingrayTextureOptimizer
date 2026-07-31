@@ -74,8 +74,10 @@ jobs:
 
       - name: Build native encoder shim
         if: runner.os != 'macOS'
+        shell: bash
         run: |
-          cmake -S native -B build/native -DCMAKE_BUILD_TYPE=Release -DCOMPRESSONATOR_SOURCE=external/compressonator
+          ls external/compressonator/cmp_core/source/cmp_core.cpp
+          cmake -S native -B build/native -DCMAKE_BUILD_TYPE=Release -DCOMPRESSONATOR_SOURCE="$GITHUB_WORKSPACE/external/compressonator"
           cmake --build build/native --config Release
 
       - name: Derive version

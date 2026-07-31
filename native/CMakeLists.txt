@@ -25,12 +25,26 @@ if(NOT DEFINED COMPRESSONATOR_SOURCE)
   message(FATAL_ERROR "Set -DCOMPRESSONATOR_SOURCE=<path to a compressonator checkout>")
 endif()
 
+# Relative paths in source lists resolve against this directory, not against
+# wherever cmake was invoked, so normalise up front rather than silently looking
+# for the sources under native/.
+get_filename_component(COMPRESSONATOR_SOURCE "${COMPRESSONATOR_SOURCE}" ABSOLUTE)
+
 set(CORE "${COMPRESSONATOR_SOURCE}/cmp_core")
 set(CMPMATH "${COMPRESSONATOR_SOURCE}/applications/_libs/cmp_math")
 
-if(NOT EXISTS "${CORE}/source/cmp_core.cpp")
-  message(FATAL_ERROR "cmp_core not found under ${COMPRESSONATOR_SOURCE}")
-endif()
+foreach(required
+        "${CORE}/source/cmp_core.cpp"
+        "${CORE}/source/core_simd_sse.cpp"
+        "${CORE}/shaders/bc7_encode_kernel.cpp"
+        "${CMPMATH}/cpu_extensions.cpp")
+  if(NOT EXISTS "${required}")
+    message(FATAL_ERROR
+      "Missing ${required}.\n"
+      "COMPRESSONATOR_SOURCE resolved to ${COMPRESSONATOR_SOURCE}; it must be an "
+      "absolute path to a checkout containing cmp_core/ and applications/_libs/cmp_math/.")
+  endif()
+endforeach()
 
 # Each SIMD kernel is compiled for its own instruction set and selected at run
 # time by cpu_extensions.cpp. That dispatch is what Compressonator's CLI calls
