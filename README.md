@@ -139,6 +139,33 @@ This is lossless and usually the single largest saving in an already-compressed
 bundle. Disable with `--no-dedup` if you want a strictly one-payload-per-entry
 layout.
 
+## File size is not video memory
+
+The tool reports two numbers, because they are not the same thing:
+
+```
+disk   521.6 MiB ->   54.9 MiB   (saves 466.7 MiB)
+gpu    521.6 MiB ->  111.9 MiB   (saves 409.7 MiB)
+```
+
+Sharing a duplicate payload shrinks the **file**, but the engine still builds one
+GPU resource per entry, so both entries are uploaded and video memory is
+unchanged. Only actually shrinking a surface helps there:
+
+| Optimisation | Smaller file | Less video memory |
+| --- | --- | --- |
+| Block compression | yes | yes |
+| Collapsing a solid colour | yes | yes |
+| Resizing | yes | yes |
+| Sharing duplicates | yes | **no** |
+
+So if you are chasing download size, deduplication is the big win. If you are
+chasing VRAM, it does nothing and you want `--max-size`.
+
+Two caveats on the GPU figure: it assumes every texture is resident at once,
+which is the worst case, and it excludes anything the engine pulls in from the
+`.stream` file on demand.
+
 ## Resizing, and whether it will look blurry
 
 Resizing is the only genuinely lossy thing the tool does, so it is **off by

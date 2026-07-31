@@ -143,6 +143,32 @@ public sealed class OptimizationPlan
 
     public long PredictedSaving => CurrentGpuSize - PredictedGpuSize;
 
+    /// <summary>
+    /// Bytes the GPU must allocate today. Each entry becomes its own resource, so
+    /// a payload shared by several entries is counted once per entry — sharing
+    /// shrinks the file, not video memory.
+    /// </summary>
+    public long CurrentGpuFootprint => Bundle.GpuBackedFiles.Sum(f => (long)f.GpuSize);
+
+    /// <summary>
+    /// Projected GPU allocation. Unlike <see cref="PredictedGpuSize"/> this ignores
+    /// deduplication, because only shrinking a surface — compressing, collapsing or
+    /// resizing it — reduces what the GPU has to hold.
+    /// </summary>
+    public long PredictedGpuFootprint
+    {
+        get
+        {
+            var byId = Textures.ToDictionary(t => t.Texture.Entry.FileId);
+            return Bundle.GpuBackedFiles.Sum(e =>
+                byId.TryGetValue(e.FileId, out var item) && item.Include
+                    ? item.PredictedSize
+                    : (long)e.GpuSize);
+        }
+    }
+
+    public long PredictedFootprintSaving => CurrentGpuFootprint - PredictedGpuFootprint;
+
     internal static long Align(long value)
     {
         var rem = value % BundleFormat.GpuAlignment;

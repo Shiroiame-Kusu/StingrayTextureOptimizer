@@ -149,6 +149,41 @@ public class DeduplicationTests
     }
 
     [Fact]
+    public void SharingShrinksTheFileButNotTheGpuFootprint()
+    {
+        // Each entry becomes its own GPU resource regardless of where its bytes
+        // live, so sharing saves disk and download, never video memory.
+        using var fixture = new SyntheticBundle()
+            .AddOpaqueAsset(65536, seed: 3)
+            .AddOpaqueAsset(65536, seed: 3)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+        var plan = OptimizationPlan.Build(bundle, gpu);
+
+        Assert.Equal(65536, plan.PredictedGpuSize);          // one payload on disk
+        Assert.Equal(131072, plan.PredictedGpuFootprint);    // two GPU resources
+        Assert.Equal(0, plan.PredictedFootprintSaving);      // nothing was shrunk
+    }
+
+    [Fact]
+    public void ShrinkingASurfaceDoesReduceTheGpuFootprint()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddTexture(128, 128, (_, _) => (0, 0, 0, 255))   // solid -> collapses
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+        var plan = OptimizationPlan.Build(bundle, gpu);
+
+        Assert.True(plan.PredictedFootprintSaving > 0,
+            "collapsing a solid colour must reduce what the GPU allocates");
+        Assert.True(plan.PredictedGpuFootprint < plan.CurrentGpuFootprint);
+    }
+
+    [Fact]
     public void StreamedTexturesAreNotFlaggedForPartialResidency()
     {
         // A texture whose mip chain lives in the .stream file keeps only a tail in

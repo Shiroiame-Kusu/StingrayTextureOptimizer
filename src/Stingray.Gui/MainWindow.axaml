@@ -57,8 +57,12 @@
         <TextBlock Grid.Row="0" Grid.Column="0" Text="{Binding Status}" TextWrapping="Wrap"
                    VerticalAlignment="Center" Margin="0,0,12,0" />
         <StackPanel Grid.Row="0" Grid.Column="1" Orientation="Horizontal" Spacing="12">
-          <TextBlock VerticalAlignment="Center" FontWeight="SemiBold"
-                     Text="{Binding SavingSummary}" />
+          <StackPanel VerticalAlignment="Center">
+            <TextBlock FontWeight="SemiBold" HorizontalAlignment="Right"
+                       Text="{Binding SavingSummary}" />
+            <TextBlock Opacity="0.6" FontSize="11" HorizontalAlignment="Right"
+                       Text="{Binding FootprintSummary}" />
+          </StackPanel>
           <Button Content="Optimize" Click="OnOptimizeClicked"
                   IsEnabled="{Binding CanOptimize}" Classes="accent" MinWidth="110" />
         </StackPanel>

@@ -153,8 +153,14 @@ internal static class Program
                             + $"entry already has, wasting {Human(plan.RedundantBytes)}. "
                             + "These are stored once and shared.");
 
-        Console.WriteLine($"\ntotal {Human(plan.CurrentGpuSize)} -> {Human(plan.PredictedGpuSize)} "
-                        + $"(saves {Human(plan.PredictedSaving)})");
+        Console.WriteLine($"\ndisk  {Human(plan.CurrentGpuSize),10} -> {Human(plan.PredictedGpuSize),10}"
+                        + $"   (saves {Human(plan.PredictedSaving)})");
+        Console.WriteLine($"gpu   {Human(plan.CurrentGpuFootprint),10} -> {Human(plan.PredictedGpuFootprint),10}"
+                        + $"   (saves {Human(plan.PredictedFootprintSaving)})");
+
+        if (plan.PredictedGpuFootprint > plan.PredictedGpuSize)
+            Console.WriteLine("      sharing duplicates shrinks the file but not video memory: "
+                            + "each entry is still its own GPU resource.");
     }
 
     /// <summary>Content summary, plus the resize cost when one is planned.</summary>

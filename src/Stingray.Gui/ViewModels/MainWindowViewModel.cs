@@ -82,6 +82,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
         ? string.Empty
         : $"{Format.Bytes(CurrentSize)} → {Format.Bytes(PredictedSize)}  (−{SavingFraction:P0})";
 
+    public long CurrentFootprint { get; private set; }
+    public long PredictedFootprint { get; private set; }
+
+    /// <summary>
+    /// Video memory is not the same as file size: sharing duplicates shrinks the
+    /// file, but each entry is still its own GPU resource.
+    /// </summary>
+    public string FootprintSummary => CurrentFootprint == 0
+        ? string.Empty
+        : $"GPU memory {Format.Bytes(CurrentFootprint)} → {Format.Bytes(PredictedFootprint)}";
+
     public async Task LoadAsync(string path)
     {
         IsBusy = true;
@@ -117,6 +128,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             plan.Deduplicate = Deduplicate;
             DuplicateEntryCount = plan.DuplicateEntryCount;
             RedundantBytes = plan.RedundantBytes;
+            CurrentFootprint = plan.CurrentGpuFootprint;
             RecalculateTotals();
 
             Status = (Textures.Count, DuplicateEntryCount) switch
@@ -187,6 +199,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Skipped.Clear();
             DuplicateEntryCount = 0;
             RedundantBytes = 0;
+            CurrentFootprint = 0;
             _plan = null;
             _bundle = null;
             RecalculateTotals();
@@ -213,6 +226,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(Saving));
         OnPropertyChanged(nameof(SavingFraction));
         OnPropertyChanged(nameof(SavingSummary));
+        PredictedFootprint = _plan?.PredictedGpuFootprint ?? CurrentFootprint;
+        OnPropertyChanged(nameof(FootprintSummary));
         OnPropertyChanged(nameof(HasPlan));
         OnPropertyChanged(nameof(HasSkipped));
         OnPropertyChanged(nameof(HasDuplicates));
