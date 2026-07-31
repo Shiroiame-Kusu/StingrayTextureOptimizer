@@ -8,7 +8,7 @@
         x:Class="Stingray.Gui.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
-        Width="1180" Height="720" MinWidth="900" MinHeight="520">
+        Width="1320" Height="740" MinWidth="900" MinHeight="520">
 
   <DockPanel Margin="12">
 
@@ -115,27 +115,27 @@
                 HeadersVisibility="Column">
         <DataGrid.Columns>
           <DataGridCheckBoxColumn Header="" Binding="{Binding Include}" Width="40" />
-          <DataGridTextColumn Header="Texture" Binding="{Binding Name}" IsReadOnly="True" Width="150" />
-          <DataGridTextColumn Header="Dimensions" Binding="{Binding Dimensions}" IsReadOnly="True" Width="165" />
-          <DataGridTextColumn Header="From" Binding="{Binding SourceFormat}" IsReadOnly="True" Width="140" />
-          <DataGridTemplateColumn Header="To" Width="130">
+          <DataGridTextColumn Header="Texture" Binding="{Binding Name}" IsReadOnly="True" Width="148" />
+          <DataGridTextColumn Header="Dimensions" Binding="{Binding Dimensions}" IsReadOnly="True" Width="200" />
+          <DataGridTextColumn Header="From" Binding="{Binding SourceFormat}" IsReadOnly="True" Width="160" />
+          <DataGridTemplateColumn Header="To" Width="115">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate>
-                <TextBlock Text="{Binding TargetFormat}" VerticalAlignment="Center" Margin="4,0" />
+                <TextBlock Text="{Binding TargetFormatName}" VerticalAlignment="Center" Margin="4,0" />
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
             <DataGridTemplateColumn.CellEditingTemplate>
               <DataTemplate>
                 <ComboBox ItemsSource="{Binding AvailableFormats}"
-                          SelectedItem="{Binding TargetFormat}" />
+                          SelectedItem="{Binding SelectedFormat}" />
               </DataTemplate>
             </DataGridTemplateColumn.CellEditingTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="Size" Binding="{Binding CurrentSizeText}" IsReadOnly="True" Width="90" />
-          <DataGridTextColumn Header="New" Binding="{Binding PredictedSizeText}" IsReadOnly="True" Width="90" />
-          <DataGridTextColumn Header="Saved" Binding="{Binding SavingText}" IsReadOnly="True" Width="90" />
-          <DataGridTextColumn Header="Content" Binding="{Binding Content}" IsReadOnly="True" Width="*" />
-          <DataGridTextColumn Header="Resize cost" Binding="{Binding ResizeCost}" IsReadOnly="True" Width="230">
+          <DataGridTextColumn Header="Size" Binding="{Binding CurrentSizeText}" IsReadOnly="True" Width="92" />
+          <DataGridTextColumn Header="New" Binding="{Binding PredictedSizeText}" IsReadOnly="True" Width="92" />
+          <DataGridTextColumn Header="Saved" Binding="{Binding SavingText}" IsReadOnly="True" Width="92" />
+          <DataGridTextColumn Header="Content" Binding="{Binding Content}" IsReadOnly="True" Width="1*" />
+          <DataGridTextColumn Header="Resize cost" Binding="{Binding ResizeCost}" IsReadOnly="True" Width="2*">
             <DataGridTextColumn.HeaderTemplate>
               <DataTemplate>
                 <TextBlock Text="Resize cost"

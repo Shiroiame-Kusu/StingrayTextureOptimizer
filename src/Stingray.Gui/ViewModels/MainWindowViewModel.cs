@@ -108,9 +108,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// has already been optimised has duplicates that share one region, which cost
     /// nothing and cannot be reclaimed again.
     /// </summary>
-    public bool CanOptimize =>
-        !IsBusy && _plan is not null
+    /// <summary>Whether repacking would shrink anything, regardless of busy state.</summary>
+    public bool HasWork =>
+        _plan is not null
         && (PredictedSize < CurrentSize || PredictedFootprint < CurrentFootprint);
+
+    public bool CanOptimize => !IsBusy && HasWork;
 
     public string SavingSummary => CurrentSize == 0
         ? string.Empty
@@ -166,7 +169,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             CurrentFootprint = plan.CurrentGpuFootprint;
             RecalculateTotals();
 
-            Status = !CanOptimize
+            // HasWork, not CanOptimize: IsBusy is still true here and would make
+            // every freshly loaded bundle look like it had nothing to do.
+            Status = !HasWork
                 ? "Nothing to do: this bundle is already optimised."
                 : (Textures.Count, DuplicateEntryCount) switch
                 {
@@ -275,6 +280,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowDuplicateInfo));
         OnPropertyChanged(nameof(DuplicateSummary));
         OnPropertyChanged(nameof(DuplicateEntryCount));
+        OnPropertyChanged(nameof(HasWork));
         OnPropertyChanged(nameof(CanOptimize));
     }
 

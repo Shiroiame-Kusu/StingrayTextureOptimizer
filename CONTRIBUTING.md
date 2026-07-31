@@ -53,6 +53,22 @@ instead of catching it. New write paths need matching checks.
   similar), especially for normal maps, where the current number under-weights
   how visible fine ribbing is.
 
+## Documentation screenshots
+
+The images in `docs/images/` are rendered by the app itself, not captured from a
+desktop, so they are reproducible and contain nothing but the window:
+
+```sh
+dotnet build -c Release
+./src/Stingray.Gui/bin/Release/net10.0/stingray-tex-gui \
+    --screenshot docs/images/01-plan.png --bundle /path/to/some.patch_0
+./src/Stingray.Gui/bin/Release/net10.0/stingray-tex-gui \
+    --screenshot docs/images/02-resize.png --cap 2048 --bundle /path/to/some.patch_0
+```
+
+Regenerate them when the UI changes. Use your own bundle: game assets must not
+be committed, and only the rendered window ends up in the PNG.
+
 ## Style
 
 Match the surrounding code. Comments should explain *why*, not restate the code;

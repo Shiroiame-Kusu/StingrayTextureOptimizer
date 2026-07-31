@@ -8,6 +8,12 @@ using Stingray.Core.Textures;
 
 namespace Stingray.Gui.ViewModels;
 
+/// <summary>A target format with a readable label for the dropdown.</summary>
+public sealed record FormatChoice(DxgiFormat Value)
+{
+    public override string ToString() => Value.DisplayName();
+}
+
 /// <summary>Row model for one texture in the plan grid.</summary>
 public sealed partial class TextureItemViewModel : ObservableObject
 {
@@ -35,12 +41,36 @@ public sealed partial class TextureItemViewModel : ObservableObject
     public string Rationale => Item.Recommendation.Rationale;
     public long CurrentSize => Item.CurrentSize;
 
-    public string Dimensions =>
-        Item.TargetWidth == Item.Texture.Width && Item.TargetHeight == Item.Texture.Height
-            ? $"{Item.Texture.Width}x{Item.Texture.Height}"
-            : $"{Item.Texture.Width}x{Item.Texture.Height} → {Item.TargetWidth}x{Item.TargetHeight}";
+    /// <summary>
+    /// Square textures are written as a single number: "4096x4096 → 2048x2048"
+    /// is mostly redundant and does not fit the column.
+    /// </summary>
+    public string Dimensions
+    {
+        get
+        {
+            var square = Item.Texture.Width == Item.Texture.Height;
+            var from = square ? $"{Item.Texture.Width}²" : $"{Item.Texture.Width}×{Item.Texture.Height}";
+            if (Item.TargetWidth == Item.Texture.Width && Item.TargetHeight == Item.Texture.Height)
+                return from;
 
-    public IReadOnlyList<DxgiFormat> AvailableFormats => TextureEncoder.SupportedTargets;
+            var targetSquare = Item.TargetWidth == Item.TargetHeight;
+            var to = targetSquare ? $"{Item.TargetWidth}²" : $"{Item.TargetWidth}×{Item.TargetHeight}";
+            return $"{from} → {to}";
+        }
+    }
+
+    public IReadOnlyList<FormatChoice> AvailableFormats { get; } =
+        [.. TextureEncoder.SupportedTargets.Select(f => new FormatChoice(f))];
+
+    /// <summary>Readable name for the grid; the enum's own ToString is not one.</summary>
+    public string TargetFormatName => Item.TargetFormat.DisplayName();
+
+    public FormatChoice SelectedFormat
+    {
+        get => new(TargetFormat);
+        set => TargetFormat = value.Value;
+    }
 
     [ObservableProperty]
     private bool _include;
@@ -81,6 +111,8 @@ public sealed partial class TextureItemViewModel : ObservableObject
         OnPropertyChanged(nameof(SavingText));
         OnPropertyChanged(nameof(Dimensions));
         OnPropertyChanged(nameof(ResizeCost));
+        OnPropertyChanged(nameof(TargetFormatName));
+        OnPropertyChanged(nameof(SelectedFormat));
         OnPropertyChanged(nameof(IsRiskyOverride));
         _onChanged();
     }

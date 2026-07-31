@@ -19,6 +19,9 @@ public partial class MainWindow : Window
         DataContext = _viewModel;
     }
 
+    /// <summary>Renders this window to the path given by --screenshot.</summary>
+    internal Task CaptureScreenshotAsync() => Screenshot.CaptureAsync(this, _viewModel);
+
     private async void OnOpenClicked(object? sender, RoutedEventArgs e)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions

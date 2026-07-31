@@ -14,7 +14,20 @@ public partial class App : Application
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
-            desktop.MainWindow = new MainWindow();
+        {
+            var window = new MainWindow();
+            desktop.MainWindow = window;
+
+            if (Screenshot.Requested)
+            {
+                window.Opened += async (_, _) =>
+                {
+                    await window.CaptureScreenshotAsync();
+                    desktop.Shutdown();
+                };
+            }
+        }
+
         base.OnFrameworkInitializationCompleted();
     }
 }

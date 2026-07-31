@@ -58,12 +58,12 @@ public sealed class TextureAnalysis
     /// <summary>Plain-language reading of <see cref="DetailHeadroomDb"/>.</summary>
     public string DetailVerdict => DetailHeadroomDb switch
     {
-        double.PositiveInfinity => "no detail lost at half size",
-        var d when double.IsNaN(d) => "detail not measured",
-        >= 45 => $"no visible detail at full size ({DetailHeadroomDb:F0} dB)",
-        >= 36 => $"slight softening at half size ({DetailHeadroomDb:F0} dB)",
-        >= 30 => $"visible softening at half size ({DetailHeadroomDb:F0} dB)",
-        _ => $"real detail lost at half size ({DetailHeadroomDb:F0} dB)",
+        double.PositiveInfinity => "nothing lost",
+        var d when double.IsNaN(d) => "not measured",
+        >= 45 => $"nothing visible lost ({DetailHeadroomDb:F0} dB)",
+        >= 36 => $"slight softening ({DetailHeadroomDb:F0} dB)",
+        >= 30 => $"visible softening ({DetailHeadroomDb:F0} dB)",
+        _ => $"real detail lost ({DetailHeadroomDb:F0} dB)",
     };
 
     /// <summary>True when halving costs nothing a viewer could notice.</summary>

@@ -77,6 +77,17 @@ automatically.
 shrunk and what it will become. The bottom-right shows the total. Press
 **Optimize** when you are happy.
 
+![The plan for a bundle of uncompressed textures](docs/images/01-plan.png)
+
+Reading that: each row is one texture, **Size → New** is what it costs now and
+what it will cost after, and **Content** says what the analyser found inside it.
+Two of these turned out to be a solid colour, so they collapse from 2048² to
+16×16 — 16 MiB down to 128 bytes. The banner above the buttons reports payloads
+that appear more than once and will be stored once instead.
+
+Bottom right is the total: **475.1 MiB → 174.7 MiB**, and separately the GPU
+memory, which is the number to watch if you are short of VRAM.
+
 Your original files are copied to a `backup/` folder next to the bundle before
 anything is written, and the result is checked automatically afterwards.
 
@@ -87,9 +98,18 @@ default is either exactly lossless or visually indistinguishable.
 
 If you want to go further, the one setting worth touching is **Max size**. It
 halves oversized textures, which is the only option here that actually throws
-detail away. It is off by default. Turn it to `2048 max` and look at the
-**Resize cost** column: textures that say *no visible detail at full size* are
-free wins, and you can untick anything that says *real detail lost*.
+detail away. It is off by default.
+
+![The same bundle with a 2048 cap, showing the measured cost per texture](docs/images/02-resize.png)
+
+Turn it to `2048 max` and the **Resize cost** column fills in with what halving
+each texture actually costs, measured on its own pixels. Rows saying *nothing
+visible lost* are free wins. Rows saying *visible softening* or *real detail
+lost* are the ones to think about — untick the checkbox on the left to keep any
+of them at full size.
+
+Here that takes the mod from 521.6 MiB to 54.9 MiB, and its VRAM from 521.6 MiB
+to 111.9 MiB, with exactly one texture flagged as visibly softening.
 
 ### Is this safe?
 
@@ -397,10 +417,10 @@ PSNR. That number says how much detail genuinely needs full resolution:
 | Measured | Meaning |
 | --- | --- |
 | ∞ | Solid colour — resizing changes nothing |
-| ≥ 45 dB | No visible detail at full size; halving is effectively free |
-| 36–45 dB | Slight softening |
-| 30–36 dB | Visible softening |
-| < 30 dB | Real detail lost |
+| ≥ 45 dB | `nothing visible lost` — halving is effectively free |
+| 36–45 dB | `slight softening` |
+| 30–36 dB | `visible softening` |
+| < 30 dB | `real detail lost` |
 
 **This figure does not change with the encoder, and does not need to.** It is
 measured on the texture's own pixels, before compression. Block compression
