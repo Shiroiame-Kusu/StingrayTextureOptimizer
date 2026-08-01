@@ -137,13 +137,34 @@ held resident in `.gpu_resources`**:
 | Value | Meaning |
 | --- | --- |
 | `0xFFFFFFFF` | Nothing is streamed. The whole mip chain is in `.gpu_resources` and resident. |
-| `N` | Levels `0..N-1` live in `.stream` and load on demand; levels `N..` are always resident. |
+| `N` | Levels `N..` are always resident in `.gpu_resources`. The **entire** chain also lives in `.stream`, and levels `0..N-1` load on demand. |
 
 Confirmed by reconstructing each level's size from the DDS dimensions, format and
 mip count, then finding which suffix of the chain sums to the entry's `gpuSize`:
 across two real bundles that suffix's start index matched this field for every
 texture (29 of 29, and 1 of 1). The only exceptions are 4×4 textures, where the
 entire chain is 48 bytes and the question is degenerate.
+
+### What `.stream` actually holds
+
+A complete copy of the chain, not just the levels above the resident floor.
+`streamSize` equals the full chain size in every streamed sample (21 of 21), and
+the resident `.gpu_resources` payload is byte-for-byte identical to the last
+`gpuSize` bytes of that texture's `.stream` region (21 of 21). The resident tail
+is a duplicate, which is what lets the engine draw something immediately while
+the higher levels are still loading.
+
+`.stream` is packed exactly like `.gpu_resources`: 64-byte aligned, in file-table
+order, ending precisely at the last payload with no slack.
+
+### The field at prefix offset 4
+
+A streaming flag: zero for every non-streamed texture (237 of 237), non-zero for
+every streamed one (21 of 21). Only the values 1 and 2 have been observed, and
+what separates them is not known — it does not follow from the mip count, the
+resident index, the format or the dimensions. Anything that converts a resident
+texture into a streamed one has to get this right, so it needs establishing
+first.
 
 This matters for memory rather than disk. A 4096×4096 BC7 texture with a full
 13-level chain is 21.3 MiB; if the field says `0xFFFFFFFF`, all of it is resident
