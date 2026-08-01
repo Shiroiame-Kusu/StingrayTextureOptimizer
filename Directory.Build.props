@@ -8,7 +8,7 @@
     <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
     <InvariantGlobalization>true</InvariantGlobalization>
     <!-- Local default; CI overrides with the git tag, or 0.0.0-<sha> untagged. -->
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Shiroiame-Kusu</Authors>
     <Copyright>Copyright (C) 2026 Shiroiame-Kusu</Copyright>
     <PackageLicenseExpression>GPL-3.0-or-later</PackageLicenseExpression>
