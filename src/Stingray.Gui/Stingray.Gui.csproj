@@ -14,6 +14,36 @@
     -->
     <AvaloniaVersion>11.3.13</AvaloniaVersion>
   </PropertyGroup>
+
+  <PropertyGroup>
+    <PublishAot>true</PublishAot>
+    <IsAotCompatible>true</IsAotCompatible>
+    <StripSymbols>true</StripSymbols>
+    <!--
+      Avalonia.Controls.DataGrid is the one dependency not annotated for
+      trimming, so it rolls its warnings up into these two. Everything it
+      reflects over is accounted for:
+
+        - GenerateColumn is reached only through AutoGenerateColumns, which is
+          False here; every column is declared with an explicit binding.
+        - UpdateDataProperties, GetItemType and GetPropertyOrIndexer resolve
+          properties on the row model, which compiled bindings already reference
+          and TrimmerRoots.xml pins regardless.
+        - DataGridValueConverter falls back to DefaultValueConverter only when a
+          column's source and target types differ; every column here binds a
+          string or a bool straight through.
+
+      A clean link says nothing about whether reflection still resolves at run
+      time, so the published binary is smoke-tested by rendering the grid with a
+      real bundle loaded: see the screenshot mode and native/README.md.
+    -->
+    <NoWarn>$(NoWarn);IL2104;IL3053</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <TrimmerRootDescriptor Include="TrimmerRoots.xml" />
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="$(AvaloniaVersion)" />
     <PackageReference Include="Avalonia.Desktop" Version="$(AvaloniaVersion)" />

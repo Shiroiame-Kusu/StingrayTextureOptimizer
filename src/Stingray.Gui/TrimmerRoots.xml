@@ -1,0 +1,19 @@
+<!--
+  SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  DataGrid resolves a row's properties reflectively in a few places
+  (DataGridDataConnection.UpdateDataProperties, DataGridCollectionView.GetItemType,
+  TypeHelper.GetPropertyOrIndexer). Compiled bindings already reference every
+  property the grid displays, so trimming would keep them anyway — this makes
+  that guarantee explicit rather than incidental, so adding a property to a row
+  model cannot quietly break the grid in an AOT build.
+-->
+<linker>
+  <assembly fullname="stingray-tex-gui">
+    <namespace fullname="Stingray.Gui.ViewModels" preserve="all" />
+  </assembly>
+  <assembly fullname="Stingray.Core">
+    <type fullname="Stingray.Core.Optimization.SkippedTexture" preserve="all" />
+  </assembly>
+</linker>

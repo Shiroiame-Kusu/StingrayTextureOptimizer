@@ -187,12 +187,43 @@ even a .NET runtime.
 | macOS Intel | `stingray-tex-<version>-osx-x64.tar.gz` |
 | macOS Apple Silicon | `stingray-tex-<version>-osx-arm64.tar.gz` |
 
-Each contains `stingray-tex` (the CLI) and `stingray-tex-gui`.
+Unpack it and run. Keep the files together — the executables load the libraries
+beside them.
 
-The CLI is compiled with **Native AOT**: a single ~2 MB native binary with no
-runtime dependency and roughly 1 ms of startup. The GUI ships self-contained
-instead — Avalonia's `DataGrid` is neither trim- nor AOT-clean, so forcing AOT
-on it would produce a binary with silently broken bindings.
+```
+stingray-tex           CLI, ~2.7 MB
+stingray-tex-gui       GUI, ~22 MB
+libSkiaSharp.so        rendering
+libHarfBuzzSharp.so    text shaping
+stingray_cmp.so        fast encoder (Linux and Windows)
+```
+
+Both are compiled with **Native AOT**, so neither needs a .NET runtime; on Linux
+the binaries link nothing beyond `libc` and `libm`. The CLI starts in about a
+millisecond.
+
+Skia and HarfBuzz stay as separate shared libraries because SkiaSharp ships no
+static archive to link against. Everything else is inside the executables.
+
+<details>
+<summary>How the GUI is AOT-safe despite Avalonia's <code>DataGrid</code></summary>
+
+Every binding in the XAML is a compiled binding, including the ones inside
+`DataGrid` cell templates, which carry an inline `x:DataType`. Reflection
+bindings do not survive trimming, and the compiler reports each one, so this is
+checked at build time rather than assumed.
+
+That leaves `Avalonia.Controls.DataGrid` itself, which is not annotated for
+trimming and rolls its warnings up into `IL2104`/`IL3053`. Those are suppressed
+in `Stingray.Gui.csproj`, which records what each underlying warning covers —
+briefly: column auto-generation is never used, the row properties the grid
+resolves reflectively are pinned by `TrimmerRoots.xml`, and no column needs a
+converting binding.
+
+Since a clean link says nothing about run-time reflection, CI renders the window
+offscreen from the published binary and fails if no image comes back.
+
+</details>
 
 ### From source
 
@@ -208,8 +239,9 @@ cd StingrayTextureOptimizer
 
 dotnet build -c Release
 
-# optional: a Native AOT CLI build (needs clang and zlib on Linux)
-dotnet publish src/Stingray.Cli -c Release -r linux-x64
+# optional: Native AOT builds, as shipped (needs clang and zlib on Linux)
+dotnet publish src/Stingray.Cli -c Release -r linux-x64 -o out/cli
+dotnet publish src/Stingray.Gui -c Release -r linux-x64 -o out/gui
 ```
 
 Without the first step the tool still works, just on the slower managed

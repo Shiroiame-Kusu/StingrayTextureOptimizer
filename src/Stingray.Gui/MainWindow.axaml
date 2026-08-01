@@ -5,6 +5,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:Stingray.Gui.ViewModels"
+        xmlns:opt="clr-namespace:Stingray.Core.Optimization;assembly=Stingray.Core"
         x:Class="Stingray.Gui.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
@@ -115,24 +116,32 @@
     </Border>
 
     <Grid RowDefinitions="*,Auto,Auto,Auto">
-      <DataGrid Grid.Row="0" x:CompileBindings="False"
+      <!-- Column bindings carry x:DataType inline: the grid's own bindings resolve
+           against the window's view model, but each column binds a row. Without
+           it these fall back to reflection bindings, which do not survive
+           trimming and block a Native AOT publish. -->
+      <DataGrid Grid.Row="0"
                 ItemsSource="{Binding Textures}"
                 AutoGenerateColumns="False"
                 GridLinesVisibility="Horizontal" CanUserResizeColumns="True"
                 HeadersVisibility="Column">
         <DataGrid.Columns>
-          <DataGridCheckBoxColumn Header="" Binding="{Binding Include}" Width="40" />
-          <DataGridTextColumn Header="Texture" Binding="{Binding Name}" IsReadOnly="True" Width="148" />
-          <DataGridTextColumn Header="Dimensions" Binding="{Binding Dimensions}" IsReadOnly="True" Width="200" />
-          <DataGridTextColumn Header="From" Binding="{Binding SourceFormat}" IsReadOnly="True" Width="160" />
+          <DataGridCheckBoxColumn Header="" Width="40"
+                                  Binding="{Binding Include, x:DataType=vm:TextureItemViewModel}" />
+          <DataGridTextColumn Header="Texture" IsReadOnly="True" Width="148"
+                              Binding="{Binding Name, x:DataType=vm:TextureItemViewModel}" />
+          <DataGridTextColumn Header="Dimensions" IsReadOnly="True" Width="200"
+                              Binding="{Binding Dimensions, x:DataType=vm:TextureItemViewModel}" />
+          <DataGridTextColumn Header="From" IsReadOnly="True" Width="160"
+                              Binding="{Binding SourceFormat, x:DataType=vm:TextureItemViewModel}" />
           <DataGridTemplateColumn Header="To" Width="115">
             <DataGridTemplateColumn.CellTemplate>
-              <DataTemplate>
+              <DataTemplate x:DataType="vm:TextureItemViewModel">
                 <TextBlock Text="{Binding TargetFormatName}" VerticalAlignment="Center" Margin="4,0" />
               </DataTemplate>
             </DataGridTemplateColumn.CellTemplate>
             <DataGridTemplateColumn.CellEditingTemplate>
-              <DataTemplate>
+              <DataTemplate x:DataType="vm:TextureItemViewModel">
                 <!-- Disabled for a mipmapped texture: its payload is sliced out
                      of the existing chain, so the format is whatever the author
                      encoded and cannot be changed here. -->
@@ -143,11 +152,16 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellEditingTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="Size" Binding="{Binding CurrentSizeText}" IsReadOnly="True" Width="92" />
-          <DataGridTextColumn Header="New" Binding="{Binding PredictedSizeText}" IsReadOnly="True" Width="92" />
-          <DataGridTextColumn Header="Saved" Binding="{Binding SavingText}" IsReadOnly="True" Width="92" />
-          <DataGridTextColumn Header="Content" Binding="{Binding Content}" IsReadOnly="True" Width="1*" />
-          <DataGridTextColumn Header="Resize cost" Binding="{Binding ResizeCost}" IsReadOnly="True" Width="2*">
+          <DataGridTextColumn Header="Size" IsReadOnly="True" Width="92"
+                              Binding="{Binding CurrentSizeText, x:DataType=vm:TextureItemViewModel}" />
+          <DataGridTextColumn Header="New" IsReadOnly="True" Width="92"
+                              Binding="{Binding PredictedSizeText, x:DataType=vm:TextureItemViewModel}" />
+          <DataGridTextColumn Header="Saved" IsReadOnly="True" Width="92"
+                              Binding="{Binding SavingText, x:DataType=vm:TextureItemViewModel}" />
+          <DataGridTextColumn Header="Content" IsReadOnly="True" Width="1*"
+                              Binding="{Binding Content, x:DataType=vm:TextureItemViewModel}" />
+          <DataGridTextColumn Header="Resize cost" IsReadOnly="True" Width="2*"
+                              Binding="{Binding ResizeCost, x:DataType=vm:TextureItemViewModel}">
             <DataGridTextColumn.HeaderTemplate>
               <DataTemplate>
                 <TextBlock Text="Resize cost"
@@ -164,10 +178,9 @@
       </Border>
       <TextBlock Grid.Row="2" Margin="0,10,0,4" FontWeight="SemiBold" Text="Skipped"
                  IsVisible="{Binding HasSkipped}" />
-      <ItemsControl Grid.Row="3" ItemsSource="{Binding Skipped}" MaxHeight="110"
-                    x:CompileBindings="False">
+      <ItemsControl Grid.Row="3" ItemsSource="{Binding Skipped}" MaxHeight="110">
         <ItemsControl.ItemTemplate>
-          <DataTemplate>
+          <DataTemplate x:DataType="opt:SkippedTexture">
             <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap">
               <Run Text="{Binding Name}" />
               <Run Text=" — " />

@@ -97,13 +97,28 @@ jobs:
           dotnet publish src/Stingray.Cli -c Release -r ${{ matrix.rid }}
           -p:Version=${{ steps.version.outputs.value }} -o out/cli
 
-      # The GUI cannot be AOT'd: Avalonia.Controls.DataGrid is neither trim- nor
-      # AOT-clean (IL2104/IL3053), so it ships self-contained instead.
-      - name: Publish GUI (self-contained)
+      # The GUI is Native AOT too. Its XAML uses compiled bindings throughout, so
+      # the only trim warnings left came from Avalonia.Controls.DataGrid; the
+      # csproj suppresses those two roll-ups and records what each one covers.
+      # Skia and HarfBuzz stay as shared libraries beside the binary, since
+      # SkiaSharp ships no static archive to link against.
+      - name: Publish GUI (Native AOT)
         run: >
           dotnet publish src/Stingray.Gui -c Release -r ${{ matrix.rid }}
-          --self-contained true -p:PublishSingleFile=true
           -p:Version=${{ steps.version.outputs.value }} -o out/gui
+
+      # A clean link does not prove a trimmed binary boots: Avalonia resolves its
+      # windowing backend, theme and Skia at run time, and a trimming mistake
+      # shows up there rather than at compile time. Render the window offscreen
+      # and require a non-empty PNG back.
+      - name: Smoke-test the AOT GUI
+        if: matrix.rid == 'linux-x64'
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y xvfb libx11-6 libice6 libsm6 libfontconfig1
+          xvfb-run -a ./out/gui/stingray-tex-gui --screenshot /tmp/smoke.png
+          test -s /tmp/smoke.png
+          echo "rendered $(stat -c%s /tmp/smoke.png) bytes"
 
       - name: Stage release layout
         shell: bash
@@ -111,14 +126,17 @@ jobs:
           set -euo pipefail
           stage="stingray-tex-${{ steps.version.outputs.value }}-${{ matrix.rid }}"
           mkdir -p "$stage"
-          # Binaries only; debug symbols are not shipped.
+          # Everything the publish produced except debug symbols. That includes
+          # the Skia and HarfBuzz shared libraries, which the AOT binary loads
+          # from its own directory and cannot run without.
           find out/cli out/gui -maxdepth 1 -type f \
             ! -name '*.pdb' ! -name '*.dbg' ! -name '*.dwarf' \
             -exec cp {} "$stage/" \;
           cp LICENSE README.md "$stage/"
 
-          # The shim sits next to the executables; the app also looks in tools/.
-          # Its MIT notice must ship with it.
+          # The publish already carries the shim when it was built, but copy it
+          # explicitly so a missed copy cannot silently drop the fast encoder,
+          # and so its MIT notice always ships alongside.
           shim=$(find build/native \( -name 'stingray_cmp.so' -o -name 'stingray_cmp.dll' \) 2>/dev/null | head -1 || true)
           if [ -n "$shim" ]; then
             cp "$shim" "$stage/"
@@ -168,7 +186,9 @@ jobs:
           files: artifacts/*
           generate_release_notes: true
           body: |
-            Native AOT command-line binaries and self-contained GUI builds.
+            Native AOT builds of both the command-line tool and the GUI.
 
-            `stingray-tex` needs no .NET runtime installed. The GUI ships
-            self-contained because Avalonia's DataGrid is not AOT-compatible.
+            Neither needs a .NET runtime installed. Unpack the archive for your
+            platform and run — everything else it needs is in there: the Skia
+            and HarfBuzz rendering libraries, and `stingray_cmp`, the fast
+            encoder, on Linux and Windows. Keep the files together.
