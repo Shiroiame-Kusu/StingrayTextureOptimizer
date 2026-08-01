@@ -58,11 +58,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     ];
 
     /// <summary>
-    /// Resident floor for mip streaming. Off by default: the conversion writes
-    /// one field whose meaning is not fully established, so it needs testing in
-    /// game before anyone relies on it.
+    /// Every resident floor mip streaming could offer. Off by default: the
+    /// conversion writes one field whose meaning is not fully established, so it
+    /// needs testing in game before anyone relies on it.
     /// </summary>
-    public IReadOnlyList<StreamFloor> StreamFloors { get; } =
+    private static readonly StreamFloor[] AllStreamFloors =
     [
         new(0, "Off"),
         new(2048, "Keep 2048 resident"),
@@ -74,9 +74,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
     ];
 
     /// <summary>
+    /// Floors that can actually do something. A floor at or above the size cap is
+    /// unreachable — nothing survives the cap that is bigger than it — so offering
+    /// it would only let you pick a setting with no effect.
+    /// </summary>
+    public IReadOnlyList<StreamFloor> StreamFloors =>
+    [
+        .. AllStreamFloors.Where(f => f.Value == 0
+                                      || SizeCap.Value == 0
+                                      || f.Value < SizeCap.Value),
+    ];
+
+    /// <summary>
     /// Mip levels only means anything while streaming is off. A streamed texture
-    /// keeps its whole chain — that is the point — so there is nothing to drop,
-    /// and leaving the choice live would let it look as though it applied.
+    /// keeps whatever chain survives the size cap — that is the point — so there
+    /// is nothing further to drop, and leaving the choice live would let it look
+    /// as though it applied.
     /// </summary>
     public bool CanChooseMipMode => !IsBusy && StreamFloor.Value == 0;
 
@@ -88,8 +101,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             + "Keep one level only: throw the chain away and keep a single image. Smaller, but "
             + "minified surfaces shimmer and sample less efficiently.\n"
             + "Either way the pixels are the author's own: nothing is re-encoded."
-            : "Not used while Stream mips is on: a streamed texture keeps its whole chain, "
-            + "so there are no levels to drop. Set Stream mips to Off to choose here.";
+            : "Not used while Stream mips is on: a streamed texture keeps the chain that "
+            + "survives Max size, so there is nothing further to drop. Set Stream mips to "
+            + "Off to choose here.";
 
     [ObservableProperty] private string? _bundlePath;
     [ObservableProperty] private string _status = "Open a bundle to begin.";
@@ -354,11 +368,31 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         OnPropertyChanged(nameof(CanChooseMipMode));
         OnPropertyChanged(nameof(MipModeHint));
+
+        // Streaming always keeps the chain, so show that rather than leaving a
+        // stale "keep one level only" greyed out as though it still applied.
+        if (value.Value != 0 && MipSelection.Value != MipMode.KeepChain)
+        {
+            MipSelection = MipModes[0];
+            return;   // that assignment replans
+        }
+
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }
 
     partial void OnSizeCapChanged(SizeCap value)
     {
+        OnPropertyChanged(nameof(StreamFloors));
+
+        // Lowering the cap can strand the current floor above it, where it would
+        // silently do nothing. Pull it down to the largest one that still works.
+        if (StreamFloor.Value != 0 && value.Value != 0 && StreamFloor.Value >= value.Value)
+        {
+            StreamFloor = StreamFloors.FirstOrDefault(f => f.Value != 0)
+                          ?? AllStreamFloors[0];
+            return;   // that assignment replans
+        }
+
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }
 

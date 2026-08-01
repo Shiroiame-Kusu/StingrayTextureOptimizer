@@ -76,9 +76,15 @@ public static class BundleOptimizer
             // in video memory. Both are slices of what is already there.
             if (item.IsStreamConversion)
             {
-                var resident = item.Texture.MipChain.Take(item.StreamResidentMip!.Value).Sum();
-                streamPayloads[entry.FileId] = surface;
-                encoded[entry.FileId] = surface.AsSpan((int)resident).ToArray();
+                // Levels above the size cap are dropped outright; what is left goes
+                // to .stream, and the tail below the floor also stays resident.
+                var chain = item.Texture.MipChain;
+                var dropped = (int)chain.Take(item.MipLevelsToDrop).Sum();
+                var untilResident = (int)chain
+                    .Take(item.MipLevelsToDrop + item.StreamResidentMip!.Value).Sum();
+
+                streamPayloads[entry.FileId] = surface.AsSpan(dropped).ToArray();
+                encoded[entry.FileId] = surface.AsSpan(untilResident).ToArray();
                 continue;
             }
 
@@ -201,17 +207,20 @@ public static class BundleOptimizer
             var entry = item.Texture.Entry;
             var payload = image.AsSpan((int)entry.Offset, (int)entry.Size);
 
-            // A converted texture keeps its dimensions, format and level count —
-            // nothing was thrown away. What changes is the Stingray prefix, which
-            // now describes the chain and where residency starts.
+            // A converted texture keeps its format. Its dimensions and level count
+            // shrink only by whatever the size cap discarded; the Stingray prefix
+            // then describes what remains and where residency starts within it.
             if (item.IsStreamConversion)
             {
-                StingrayTexturePrefix.WriteStreaming(
-                    payload, item.Texture.Header.Offset, item.Texture.SourceFormat,
-                    item.Texture.Width, item.Texture.Height,
-                    item.Texture.MipMapCount, item.StreamResidentMip!.Value);
+                item.Texture.Header.Patch(
+                    payload, item.TargetWidth, item.TargetHeight, item.TargetFormat,
+                    surfaceSize: 0, item.TargetMipCount);
                 StingrayTexturePrefix.PatchDdsForStreaming(
-                    payload, item.Texture.Header, item.Texture.SourceFormat, item.Texture.Width);
+                    payload, item.Texture.Header, item.TargetFormat, item.TargetWidth);
+                StingrayTexturePrefix.WriteStreaming(
+                    payload, item.Texture.Header.Offset, item.TargetFormat,
+                    item.TargetWidth, item.TargetHeight,
+                    item.TargetMipCount, item.StreamResidentMip!.Value);
                 continue;
             }
 

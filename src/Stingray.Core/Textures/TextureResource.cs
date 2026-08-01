@@ -13,15 +13,27 @@ public sealed class TextureResource
     {
         Entry = entry;
         Header = header;
+
+        // Snapshot rather than proxy: Header is patched in place when a plan is
+        // applied, and a resource that described the source one moment and the
+        // result the next would make anything derived from it self-referential —
+        // a target width of "source width shifted by the levels dropped" would
+        // shift again every time it was read.
+        Width = header.Width;
+        Height = header.Height;
+        SourceFormat = header.DxgiFormat;
+        MipMapCount = Math.Max(1, header.MipMapCount);
     }
 
     public BundleFileEntry Entry { get; }
     public DdsHeader Header { get; }
 
     public string Name => Entry.Name;
-    public int Width => Header.Width;
-    public int Height => Header.Height;
-    public DxgiFormat SourceFormat => Header.DxgiFormat;
+
+    /// <summary>Dimensions of the texture as it was read, not as it may be rewritten.</summary>
+    public int Width { get; }
+    public int Height { get; }
+    public DxgiFormat SourceFormat { get; }
     public uint GpuSize => Entry.GpuSize;
 
     /// <summary>
@@ -39,7 +51,9 @@ public sealed class TextureResource
     /// since tiny textures carry 0 there while streaming nothing.
     /// </summary>
     public bool IsStreamed => Entry.StreamSize > 0;
-    public int MipMapCount => Math.Max(1, Header.MipMapCount);
+
+    /// <summary>Level count as read. Snapshotted for the reason <see cref="Width"/> is.</summary>
+    public int MipMapCount { get; }
 
     /// <summary>Size of each resident mip level, largest first.</summary>
     public long[] MipChain => SourceFormat.MipChain(Width, Height, MipMapCount);

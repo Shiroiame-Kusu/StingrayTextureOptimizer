@@ -410,6 +410,24 @@ byte written is a copy of a byte that was already there, which the tests check
 against the original. The textures that do not convert are the single-mip ones,
 which have no chain to move.
 
+**It composes with `--max-size`,** which is usually what you want. The cap
+discards levels above it for good — the only part that costs quality — and what
+survives goes to `.stream`. So `--max-size 1024 --stream 256` means `.stream`
+holds 1024 and down while video memory holds 256 and down:
+
+| | added to `.stream` | video memory |
+| --- | --- | --- |
+| `--stream 256` | 107.7 MiB | 99.4 MiB |
+| `--max-size 1024 --stream 256` | **19.7 MiB** | 99.4 MiB |
+
+Same video memory for a fifth of the disk. A floor at or above the cap can never
+stream anything, so the GUI stops offering those and the CLI treats them as a
+no-op.
+
+**Mip levels does not apply while this is on.** Streaming keeps whatever chain
+survives the cap — that is the point — so there is nothing further to drop, and
+the GUI disables that dropdown rather than letting it look as though it applied.
+
 **Why it is off by default.** The conversion has to write one field in the
 Stingray prefix whose meaning is not established: every streamed texture carries
 1 or 2 there, and the 53 samples available do not explain which. This tool

@@ -270,4 +270,93 @@ public class StreamConversionTests
         using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
         Assert.Equal(1, OptimizationPlan.Build(bundle, gpu, streamFloor: 128).StreamConversionCount);
     }
+
+    /// <summary>
+    /// The size cap and the resident floor compose: the cap discards levels above
+    /// it for good, and what survives goes to .stream with the floor resident.
+    /// </summary>
+    [Fact]
+    public void TheSizeCapAndTheResidentFloorCompose()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        var entry = bundle.Textures.Single();
+
+        byte[] original;
+        using (var gpu = GpuResourceFile.Open(bundle.GpuResourcePath))
+        {
+            original = gpu.Read(entry.GpuOffset, entry.GpuSize);
+            var plan = OptimizationPlan.Build(bundle, gpu, maxDimension: 64, streamFloor: 16);
+            var item = Assert.Single(plan.Textures);
+
+            Assert.True(item.IsStreamConversion);
+            Assert.Equal(2, item.MipLevelsToDrop);       // 256, 128 discarded
+            Assert.Equal(64, item.TargetWidth);
+            Assert.Equal(7, item.TargetMipCount);        // 64 down to 1
+            Assert.Equal(2, item.StreamResidentMip);     // 64 -> 32 -> 16
+
+            BundleOptimizer.Apply(plan, gpu, bundle.Path, bundle.GpuResourcePath, Fast,
+                                  outputStreamPath: bundle.StreamPath);
+        }
+
+        var rebuilt = Bundle.Load(fixture.BundlePath);
+        var after = rebuilt.Textures.Single();
+        var chain = DxgiFormat.Bc7Unorm.MipChain(256, 256, 9);
+
+        // .stream holds 64 and below, not the original 256 chain.
+        Assert.Equal(chain.Skip(2).Sum(), after.StreamSize);
+        using var stream = GpuResourceFile.Open(rebuilt.StreamPath);
+        Assert.Equal(original.AsSpan((int)chain.Take(2).Sum()).ToArray(),
+                     stream.Read(after.StreamOffset, after.StreamSize));
+
+        // Resident is 16 and below.
+        Assert.Equal(chain.Skip(4).Sum(), after.GpuSize);
+        using var gpu2 = GpuResourceFile.Open(rebuilt.GpuResourcePath);
+        Assert.Equal(original.AsSpan((int)chain.Take(4).Sum()).ToArray(),
+                     gpu2.Read(after.GpuOffset, after.GpuSize));
+
+        // The header describes the capped texture, not the original.
+        var payload = rebuilt.GetCpuPayload(after);
+        Assert.True(DdsHeader.TryRead(payload, out var dds));
+        Assert.Equal(64, dds!.Width);
+        Assert.Equal(7, dds.MipMapCount);
+        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(
+            payload[StingrayTexturePrefix.FirstResidentMipOffset..]));
+        Assert.Equal((uint)chain.Skip(2).Sum(), BinaryPrimitives.ReadUInt32LittleEndian(
+            payload[StingrayTexturePrefix.ChainSizeOffset..]));
+
+        // The level table describes the capped chain, starting at 64.
+        Assert.Equal(64, BinaryPrimitives.ReadUInt16LittleEndian(
+            payload[StingrayTexturePrefix.LevelTableOffset..]));
+        // And it now reads back as a streamed texture, so a second pass leaves it
+        // alone rather than treating the resident tail as a whole surface.
+        Assert.True(TextureResource.TryCreate(rebuilt, after, out var texture));
+        Assert.True(texture!.IsStreamed);
+        Assert.Equal(2u, texture.FirstResidentMip);
+        Assert.Equal(64, texture.Width);
+    }
+
+    /// <summary>
+    /// A floor at or above what survives the cap can never stream anything, which
+    /// is why the GUI stops offering those.
+    /// </summary>
+    [Fact]
+    public void AFloorAboveTheCapConvertsNothing()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+
+        // Capped to 64, so a 128 floor is unreachable.
+        Assert.Equal(0, OptimizationPlan.Build(bundle, gpu,
+            maxDimension: 64, streamFloor: 128).StreamConversionCount);
+        Assert.Equal(1, OptimizationPlan.Build(bundle, gpu,
+            maxDimension: 64, streamFloor: 32).StreamConversionCount);
+    }
 }

@@ -69,8 +69,12 @@ public sealed class TexturePlanItem
     /// </summary>
     public bool IsStreamConversion => StreamResidentMip is not null;
 
-    /// <summary>Bytes this texture will occupy in <c>.stream</c>.</summary>
-    public long PredictedStreamSize => IsStreamConversion ? Texture.MipChain.Sum() : 0;
+    /// <summary>
+    /// Bytes this texture will occupy in <c>.stream</c>: everything that survives
+    /// the size cap, which is what the engine can load back on demand.
+    /// </summary>
+    public long PredictedStreamSize =>
+        IsStreamConversion ? Texture.MipChain.Skip(MipLevelsToDrop).Sum() : 0;
 
     /// <summary>
     /// True when the payload is sliced out of the existing chain rather than
@@ -95,9 +99,11 @@ public sealed class TexturePlanItem
         {
             if (!Include) return CurrentSize;
 
-            // A streamed texture only keeps its tail resident; the rest is still
-            // there, just in .stream rather than in video memory.
-            if (IsStreamConversion) return Texture.MipChain.Skip(StreamResidentMip!.Value).Sum();
+            // A streamed texture keeps only its tail resident. Levels above the
+            // size cap are gone for good; the rest are still there, just in
+            // .stream rather than in video memory.
+            if (IsStreamConversion)
+                return Texture.MipChain.Skip(MipLevelsToDrop + StreamResidentMip!.Value).Sum();
 
             if (!IsMipDrop) return TargetFormat.SurfaceSize(TargetWidth, TargetHeight);
 

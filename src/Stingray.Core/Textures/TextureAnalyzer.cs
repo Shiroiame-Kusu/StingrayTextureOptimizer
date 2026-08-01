@@ -95,39 +95,48 @@ public static class TextureAnalyzer
         int streamFloor = 0,
         int prefixLength = 0)
     {
-        // Streaming beats every other option when it applies: the whole chain
-        // moves to .stream and only a small tail stays resident, so video memory
-        // collapses while the full-resolution levels remain available. Nothing is
-        // discarded and nothing is re-encoded, so unlike a mip drop it costs no
-        // quality at all — only disk.
+        // Streaming composes with the size cap rather than overriding it. The cap
+        // discards levels above it for good, which is the only part that costs
+        // quality; what remains goes to .stream and only the tail below the floor
+        // stays resident. So "cap at 1024, keep 256 resident" means .stream holds
+        // 1024 and down while video memory holds 256 and down.
         //
-        // A floor at or above the texture's own size is excluded: that would leave
+        // A floor at or above what survives the cap is excluded: that would leave
         // every level resident and still write a second copy into .stream, which is
         // all of the disk cost for none of the benefit.
-        var streamResident = streamFloor > 0 && mipCount > 1 && sourceFormat.IsSizable()
-                             && StingrayTexturePrefix.CanDescribe(prefixLength, mipCount)
-            ? DxgiFormatInfo.LevelsToDrop(width, height, mipCount, streamFloor)
-            : 0;
-
-        if (streamResident > 0)
+        if (streamFloor > 0 && mipCount > 1 && sourceFormat.IsSizable())
         {
-            var resident = streamResident;
-            var chain = sourceFormat.MipChain(width, height, mipCount);
-            var residentBytes = chain.Skip(resident).Sum();
+            var capped = DxgiFormatInfo.LevelsToDrop(width, height, mipCount, maxDimension);
+            var cappedWidth = Math.Max(1, width >> capped);
+            var cappedHeight = Math.Max(1, height >> capped);
+            var cappedMips = mipCount - capped;
 
-            return new FormatRecommendation
+            var resident = DxgiFormatInfo.LevelsToDrop(
+                cappedWidth, cappedHeight, cappedMips, streamFloor);
+
+            if (resident > 0 && StingrayTexturePrefix.CanDescribe(prefixLength, cappedMips))
             {
-                Format = sourceFormat,
-                Width = width,
-                Height = height,
-                TargetMipCount = mipCount,
-                StreamResidentMip = resident,
-                IsLossless = true,
-                Rationale = $"streamed: the whole {mipCount}-level chain moves to .stream, "
-                          + $"leaving {Math.Max(1, width >> resident)}x{Math.Max(1, height >> resident)} "
-                          + $"and below resident ({residentBytes:N0} bytes); "
-                          + "full resolution still loads on demand",
-            };
+                var chain = sourceFormat.MipChain(cappedWidth, cappedHeight, cappedMips);
+                var residentBytes = chain.Skip(resident).Sum();
+                var capNote = capped == 0
+                    ? $"the whole {mipCount}-level chain"
+                    : $"{cappedWidth}x{cappedHeight} and below ({capped} level(s) discarded)";
+
+                return new FormatRecommendation
+                {
+                    Format = sourceFormat,
+                    Width = cappedWidth,
+                    Height = cappedHeight,
+                    MipLevelsToDrop = capped,
+                    TargetMipCount = cappedMips,
+                    StreamResidentMip = resident,
+                    IsLossless = capped == 0,
+                    Rationale = $"streamed: {capNote} moves to .stream, leaving "
+                              + $"{Math.Max(1, cappedWidth >> resident)}x{Math.Max(1, cappedHeight >> resident)} "
+                              + $"and below resident ({residentBytes:N0} bytes); "
+                              + "the rest still loads on demand",
+                };
+            }
         }
 
         // A texture that carries a mip chain can be shrunk by discarding its top
