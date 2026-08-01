@@ -129,6 +129,38 @@ In observed samples the prefix is 192 bytes, giving a 340-byte payload. The
 pixel data itself lives in `.gpu_resources` at the entry's GPU offset, **not**
 after the header.
 
+### The Stingray texture prefix — 192 bytes
+
+| Offset | Type | Field |
+| --- | --- | --- |
+| 0x00 | u32 | Unknown id. Repeats across unrelated textures and is 0 for many. |
+| 0x04 | u32 | Streaming flag. 0 when the texture is not streamed. |
+| 0x08 | u32 | First resident mip level; `0xFFFFFFFF` when nothing is streamed. |
+| 0x0C | u32 | Zero in every sample. |
+| 0x10 | u32 | Total size of the whole mip chain. Equals the entry's stream size. |
+| 0x14 | 12 × n | Per-level table, one entry per mip level. |
+
+Each per-level entry:
+
+| Offset | Type | Field |
+| --- | --- | --- |
+| 0x00 | u16 | Level width |
+| 0x02 | u16 | Level height |
+| 0x04 | u32 | Cumulative bytes through this level — i.e. the offset of the *next* one |
+| 0x08 | u32 | Bytes remaining after this level |
+
+The final level terminates with both u32s zero rather than `(total, 0)`.
+
+For a non-streamed texture everything from 0x04 on is zero apart from the
+`0xFFFFFFFF` at 0x08: no table is written at all.
+
+Verified across 53 streamed textures drawn from the game's own bundles and from
+mods — every level's dimensions, cumulative offset and remainder matched the
+chain reconstructed from the DDS header, with no exceptions.
+
+At 12 bytes per entry the table has room for 14 levels
+(`0x14 + 14 × 12 = 0xBC`), which covers up to 8192×8192.
+
 ### Streaming: the field at prefix offset 8
 
 The u32 at offset 8 of the Stingray prefix is the **index of the first mip level
@@ -159,12 +191,22 @@ order, ending precisely at the last payload with no slack.
 
 ### The field at prefix offset 4
 
-A streaming flag: zero for every non-streamed texture (237 of 237), non-zero for
-every streamed one (21 of 21). Only the values 1 and 2 have been observed, and
-what separates them is not known — it does not follow from the mip count, the
-resident index, the format or the dimensions. Anything that converts a resident
-texture into a streamed one has to get this right, so it needs establishing
-first.
+A streaming flag: zero for every non-streamed texture (498 of 498), non-zero for
+every streamed one (53 of 53).
+
+Only the values 1 and 2 have been observed and **what separates them is not
+known**. It does not follow from the mip count, the resident index, the format,
+the dimensions or the id at offset 0. The honest reason is sample poverty: those
+53 streamed textures are only 21 distinct file ids in 5 distinct shapes, because
+the game's bundles and the mods that patch them share the same assets.
+
+| Flag | Observed on |
+| --- | --- |
+| 1 | 4×4 BC7 (3 mips, resident 0); 512×512 BC7 (10 mips, resident 4) |
+| 2 | 256×256 BC5 and BC7 (9 mips, resident 3); 256×256 RGBA8 (9 mips, resident 4) |
+
+Anything converting a resident texture into a streamed one must pick a value
+here, so this needs settling by experiment before such a feature can ship.
 
 This matters for memory rather than disk. A 4096×4096 BC7 texture with a full
 13-level chain is 21.3 MiB; if the field says `0xFFFFFFFF`, all of it is resident
