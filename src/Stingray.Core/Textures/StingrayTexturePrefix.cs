@@ -83,9 +83,13 @@ public static class StingrayTexturePrefix
         if (total > uint.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(mipCount), "Mip chain exceeds 4 GiB.");
 
-        // Start from a clean prefix so no stale table survives from whatever the
-        // texture was before.
-        payload[..prefixLength].Clear();
+        // Clear from the flag on, so no stale table survives from whatever the
+        // texture was before — but leave the id at offset 0 alone. It is non-zero
+        // on 52 of 258 textures examined and on 13 of the 21 streamed ones, and it
+        // tracks neither format nor dimensions nor level count, so there is nothing
+        // to recompute it from. Whatever it means, an engine-authored streamed
+        // texture carries it, and a converted one has to as well.
+        payload[StreamingFlagOffset..prefixLength].Clear();
 
         BinaryPrimitives.WriteUInt32LittleEndian(
             payload[StreamingFlagOffset..], StreamingFlagFor(mipCount));

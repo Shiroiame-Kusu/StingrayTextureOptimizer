@@ -21,6 +21,12 @@ internal sealed class SyntheticBundle : IDisposable
     private const int DdsLength = 148;
     private const int CpuPayloadSize = StingrayPrefix + DdsLength;
 
+    /// <summary>
+    /// The unknown id at prefix offset 0. Taken from a real texture so it is a
+    /// value the format actually carries rather than an invented one.
+    /// </summary>
+    public const uint PrefixId = 0x0172_E796;
+
     private readonly List<(ulong TypeId, byte[] Cpu, byte[] Gpu, byte[] Stream)> _entries = [];
 
     public string Directory { get; } =
@@ -189,6 +195,12 @@ internal sealed class SyntheticBundle : IDisposable
                                                  int? linearSize = null)
     {
         var payload = new byte[CpuPayloadSize];
+
+        // Offset 0 is an id of unknown meaning that real textures carry and that
+        // nothing in the file derives it from. It is written here because a
+        // fixture full of zeroes cannot tell a tool that preserves it from one
+        // that wipes it.
+        BinaryPrimitives.WriteUInt32LittleEndian(payload, PrefixId);
 
         // Offset 8 of the Stingray prefix is the first resident mip level;
         // 0xFFFFFFFF means nothing is streamed, which is what real non-streamed

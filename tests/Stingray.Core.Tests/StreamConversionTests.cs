@@ -38,6 +38,40 @@ public class StreamConversionTests
         Assert.Equal(1, on.StreamConversionCount);
     }
 
+    /// <summary>
+    /// The prefix carries an id at offset 0 whose meaning is not known and which
+    /// nothing in the file derives — so it can only be preserved, never rebuilt.
+    /// Real streamed textures carry it, which means writing the streaming
+    /// description must not take the rest of the prefix with it.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ConvertingKeepsTheUnknownIdAtTheStartOfThePrefix(bool generated)
+    {
+        using var fixture = (generated
+                ? new SyntheticBundle().AddTexture(128, 128, (x, y) => ((byte)x, (byte)y, (byte)0, (byte)255))
+                : new SyntheticBundle().AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9))
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        Assert.Equal(SyntheticBundle.PrefixId, ReadPrefixId(bundle));
+
+        using (var gpu = GpuResourceFile.Open(bundle.GpuResourcePath))
+        {
+            var plan = OptimizationPlan.Build(bundle, gpu, streamFloor: 32, generateMips: generated);
+            Assert.True(Assert.Single(plan.Textures).IsStreamConversion);
+
+            BundleOptimizer.Apply(plan, gpu, bundle.Path, bundle.GpuResourcePath, Fast,
+                                  outputStreamPath: bundle.StreamPath);
+        }
+
+        Assert.Equal(SyntheticBundle.PrefixId, ReadPrefixId(Bundle.Load(fixture.BundlePath)));
+    }
+
+    private static uint ReadPrefixId(Bundle bundle) =>
+        BinaryPrimitives.ReadUInt32LittleEndian(bundle.GetCpuPayload(bundle.Textures.Single()));
+
     [Fact]
     public void TheChainMovesToStreamAndOnlyTheTailStaysResident()
     {

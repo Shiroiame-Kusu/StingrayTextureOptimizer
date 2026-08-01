@@ -133,7 +133,7 @@ after the header.
 
 | Offset | Type | Field |
 | --- | --- | --- |
-| 0x00 | u32 | Unknown id. Repeats across unrelated textures and is 0 for many. |
+| 0x00 | u32 | Unknown id. Repeats across unrelated textures and is 0 for many. **Preserved verbatim.** |
 | 0x04 | u32 | Streaming flag. 0 when the texture is not streamed. |
 | 0x08 | u32 | First resident mip level; `0xFFFFFFFF` when nothing is streamed. |
 | 0x0C | u32 | Zero in every sample. |
@@ -153,6 +153,25 @@ The final level terminates with both u32s zero rather than `(total, 0)`.
 
 For a non-streamed texture everything from 0x04 on is zero apart from the
 `0xFFFFFFFF` at 0x08: no table is written at all.
+
+The id at 0x00 is the one field here that has to be carried across rather than
+rewritten. Across 258 textures in 6 mods, 52 carry a non-zero value — including
+13 of the 21 streamed ones — and it tracks neither format, nor dimensions, nor
+level count:
+
+| id | textures | (format, levels) seen with it |
+| --- | --- | --- |
+| `0x00000000` | 206 | 28/1, 28/9, 61/1, 71/1, 98/1, 98/9, 99/1 |
+| `0x0172E796` | 23 | 98/3, 98/9, 98/10, 98/12, 98/13, 99/1 |
+| `0xC322A444` | 7 | 83/9, 99/1 |
+| `0xA5CCAFA7` | 7 | 98/9, 98/12 |
+| `0xFCE7DA44` | 6 | 71/12, 71/13, 99/1 |
+
+Nothing observed would let it be recomputed, so converting a texture to a
+streamed one writes the flag, the chain size and the table while leaving 0x00
+exactly as it was. Everything from 0x0C to the end of the prefix, on the other
+hand, is safe to rewrite: no non-streamed texture examined has a non-zero byte
+there, and no streamed one has a non-zero byte past the end of its level table.
 
 Verified across 53 streamed textures — every level's dimensions, cumulative
 offset and remainder matched the chain reconstructed from the DDS header, with

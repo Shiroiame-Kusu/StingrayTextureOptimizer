@@ -309,6 +309,21 @@ public static class BundleVerifier
                 issues.Add(new VerificationIssue("cpu-payload",
                     $"{before.Name}: CPU payload moved or resized"));
 
+            // The id at the start of a texture's prefix is derived from nothing
+            // else in the file, so a rewrite can only carry it across. Losing it
+            // leaves the bundle structurally perfect — every size still adds up —
+            // which is precisely why it needs checking against the original.
+            if (after.IsTexture && before.Size >= 4 && after.Size >= 4)
+            {
+                var idBefore = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(
+                    original.GetCpuPayload(before));
+                var idAfter = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(
+                    rebuilt.GetCpuPayload(after));
+                if (idBefore != idAfter)
+                    issues.Add(new VerificationIssue("texture-prefix",
+                        $"{before.Name}: prefix id changed {idBefore:X8} -> {idAfter:X8}"));
+            }
+
             if (after.IsTexture || !after.HasGpuData) continue;
 
             if (before.GpuSize != after.GpuSize)
