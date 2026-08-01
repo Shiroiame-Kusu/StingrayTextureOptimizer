@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+using Stingray.Core.Dds;
+using Stingray.Core.Tests;
 using Stingray.Core.Textures;
 using Stingray.Gui.ViewModels;
 using Xunit;
@@ -14,8 +16,10 @@ namespace Stingray.Gui.Tests;
 /// to be discovered when a bundle comes out unchanged.
 /// </summary>
 /// <remarks>
-/// No bundle is opened, so nothing here starts an analysis pass: the view model
-/// only replans when a path is loaded. That leaves exactly the coupling visible.
+/// Most of these open no bundle, so nothing starts an analysis pass: the view
+/// model only replans when a path is loaded, which leaves exactly the coupling
+/// visible. The last two do open one, because whether a floor still has anything
+/// to reach is a question only a bundle can answer.
 /// </remarks>
 public class SettingCouplingTests
 {
@@ -117,6 +121,50 @@ public class SettingCouplingTests
         Assert.True(vm.StreamFloor.Value > 0);
         Assert.DoesNotContain(vm.StreamFloors, f => f.Value >= 1024 && f.Value != 0);
         Assert.True(vm.AddMips);
+    }
+
+    /// <summary>
+    /// Unticking generation on a bundle where nothing has a chain leaves the
+    /// floor with no levels to move and no tail to leave behind, so it goes too.
+    /// </summary>
+    [Fact]
+    public async Task UntickingGenerationClearsAFloorThatCanNoLongerReachAnything()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddTexture(128, 128, (x, y) => ((byte)x, (byte)y, (byte)(x ^ y), (byte)255))
+            .Write();
+
+        var vm = new MainWindowViewModel();
+        await vm.LoadAsync(fixture.BundlePath);
+
+        vm.StreamFloor = Floor(vm, 64);
+        Assert.True(vm.AddMips);
+
+        vm.AddMips = false;
+
+        Assert.Equal(0, vm.StreamFloor.Value);
+    }
+
+    /// <summary>
+    /// Where textures do carry chains the floor still reaches them without
+    /// generating anything, so "stream what is already there, re-encode nothing"
+    /// has to stay sayable — and unticking is how it gets said.
+    /// </summary>
+    [Fact]
+    public async Task UntickingGenerationKeepsAFloorThatStillReachesRealChains()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var vm = new MainWindowViewModel();
+        await vm.LoadAsync(fixture.BundlePath);
+
+        vm.StreamFloor = Floor(vm, 64);
+        vm.AddMips = false;
+
+        Assert.Equal(64, vm.StreamFloor.Value);
+        Assert.False(vm.AddMips);
     }
 
     /// <summary>

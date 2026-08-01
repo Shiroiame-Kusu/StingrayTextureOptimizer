@@ -396,7 +396,12 @@ It is also what makes `--stream` possible for them: streaming can only move
 levels that exist, so a single-level texture has nothing to stream. That is why
 the GUI ticks this for you when you pick a *Stream mips* level, and unticks it
 again if you set that back to *Off* — on its own it is a cost, not a saving.
-Untick it yourself at any point and that choice stands.
+
+Unticking it goes the other way too, but only where it has to: if nothing in the
+open bundle carries a chain of its own, *Stream mips* returns to *Off*, because
+there would be nothing left for a floor to reach. Where some textures do have
+one, the floor stays — those stream exactly as they are, so "stream what already
+has a chain and re-encode nothing" remains something you can ask for.
 
 On its own it **costs** about a third more video memory, since the chain below
 level 0 adds up to that. The two together are the point:

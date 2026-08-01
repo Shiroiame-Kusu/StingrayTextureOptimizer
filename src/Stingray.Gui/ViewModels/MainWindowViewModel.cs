@@ -360,9 +360,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     partial void OnAddMipsChanged(bool value)
     {
+        if (_linking) { Replan(); return; }
+
         // An explicit tick or untick wins over the streaming coupling from here
         // on: whatever the box says now is what the user meant it to say.
-        if (!_linking) _addMipsFollowsStream = false;
+        _addMipsFollowsStream = false;
+
+        // Unticking can leave the floor with nothing to reach. In a bundle where
+        // no texture carries a chain — which plenty of mods are — streaming has
+        // no levels to move and no tail to leave behind, so the floor becomes a
+        // setting that looks applied and is not, which is the thing this pair of
+        // couplings exists to prevent. Clear it.
+        //
+        // A bundle that has chained textures keeps its floor: those stream
+        // exactly as they are, and generating is only ever about the others. So
+        // "stream what already has a chain, re-encode nothing" stays sayable,
+        // which unticking is the natural way to say.
+        if (!value && StreamFloor.Value != 0 && _plan is { ChainedCount: 0 })
+        {
+            Link(() => StreamFloor = StreamFloors.First(f => f.Value == 0));
+            return;
+        }
+
         Replan();
     }
 

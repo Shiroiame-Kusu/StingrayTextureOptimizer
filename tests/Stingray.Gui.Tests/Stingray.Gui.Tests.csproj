@@ -10,4 +10,12 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Stingray.Gui/Stingray.Gui.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <!--
+      Linked rather than duplicated: the couplings that depend on what a bundle
+      contains can only be tested against a real one, and there is no sense in
+      having two fixtures that have to be kept saying the same thing.
+    -->
+    <Compile Include="../Stingray.Core.Tests/SyntheticBundle.cs" Link="SyntheticBundle.cs" />
+  </ItemGroup>
 </Project>
