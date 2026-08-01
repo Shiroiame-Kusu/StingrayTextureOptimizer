@@ -17,9 +17,34 @@ public sealed class TexturePlanItem
     /// <summary>Whether this texture is rewritten when the plan is applied.</summary>
     public bool Include { get; set; } = true;
 
-    public DxgiFormat TargetFormat { get; set; }
-    public int TargetWidth { get; set; }
-    public int TargetHeight { get; set; }
+    private DxgiFormat _targetFormat;
+    private int _targetWidth;
+    private int _targetHeight;
+
+    /// <summary>
+    /// Format the payload is written in. Fixed for a sliced chain: those bytes
+    /// are the author's own, still in the format they were encoded in, so the
+    /// header must say so however the caller sets this.
+    /// </summary>
+    public DxgiFormat TargetFormat
+    {
+        get => IsMipDrop ? Texture.SourceFormat : _targetFormat;
+        set => _targetFormat = value;
+    }
+
+    /// <summary>Width of the surviving level 0. Derived for a sliced chain.</summary>
+    public int TargetWidth
+    {
+        get => IsMipDrop ? Math.Max(1, Texture.Width >> MipLevelsToDrop) : _targetWidth;
+        set => _targetWidth = value;
+    }
+
+    /// <summary>Height of the surviving level 0. Derived for a sliced chain.</summary>
+    public int TargetHeight
+    {
+        get => IsMipDrop ? Math.Max(1, Texture.Height >> MipLevelsToDrop) : _targetHeight;
+        set => _targetHeight = value;
+    }
 
     /// <summary>
     /// Top mip levels to discard. Non-zero means the payload is sliced rather
@@ -38,6 +63,13 @@ public sealed class TexturePlanItem
     /// surface would silently discard every level below the first.
     /// </summary>
     public bool IsMipDrop => Texture.MipMapCount > 1;
+
+    /// <summary>
+    /// Whether the target format is a free choice. It is not for a sliced chain:
+    /// changing it there would rewrite the header to describe a format the
+    /// payload is not in, so the choice is refused rather than half-applied.
+    /// </summary>
+    public bool SupportsFormatChange => !IsMipDrop;
 
     public long CurrentSize => Texture.GpuSize;
 

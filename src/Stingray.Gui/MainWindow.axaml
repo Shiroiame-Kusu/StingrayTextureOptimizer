@@ -133,8 +133,13 @@
             </DataGridTemplateColumn.CellTemplate>
             <DataGridTemplateColumn.CellEditingTemplate>
               <DataTemplate>
+                <!-- Disabled for a mipmapped texture: its payload is sliced out
+                     of the existing chain, so the format is whatever the author
+                     encoded and cannot be changed here. -->
                 <ComboBox ItemsSource="{Binding AvailableFormats}"
-                          SelectedItem="{Binding SelectedFormat}" />
+                          SelectedItem="{Binding SelectedFormat}"
+                          IsEnabled="{Binding SupportsFormatChange}"
+                          ToolTip.Tip="{Binding FormatChangeHint}" />
               </DataTemplate>
             </DataGridTemplateColumn.CellEditingTemplate>
           </DataGridTemplateColumn>

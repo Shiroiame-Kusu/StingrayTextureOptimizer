@@ -97,7 +97,11 @@ public static class TextureAnalyzer
         // levels: the ones that remain are the author's own pixels, already
         // encoded, so nothing is recompressed and nothing is resampled. That is
         // strictly better than re-encoding a downscale, and far quicker.
-        if (mipCount > 1 && sourceFormat.IsBlockCompressed())
+        // Any sizable format, not just block-compressed: an uncompressed chain is
+        // sliced too. Letting one fall through to the branches below would pick a
+        // format the slice cannot deliver, and the header would then describe
+        // bytes that were never re-encoded.
+        if (mipCount > 1 && sourceFormat.IsSizable())
         {
             var drop = DxgiFormatInfo.LevelsToDrop(width, height, mipCount, maxDimension);
             var collapsing = mipMode == MipMode.SingleLevel && mipCount > 1;
@@ -110,7 +114,7 @@ public static class TextureAnalyzer
                     Height = height,
                     TargetMipCount = mipCount,
                     IsLossless = true,
-                    Rationale = $"already compressed with {mipCount} mip levels; left as is",
+                    Rationale = $"{mipCount} mip levels, none above the cap; left as is",
                 };
 
             var remaining = collapsing ? 1 : mipCount - drop;

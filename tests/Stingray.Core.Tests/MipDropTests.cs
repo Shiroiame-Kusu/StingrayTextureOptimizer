@@ -188,4 +188,90 @@ public class MipDropTests
         Assert.Empty(plan.Textures);
         Assert.Contains(plan.Skipped, s => s.Reason.Contains("streamed"));
     }
+
+    /// <summary>
+    /// A sliced payload keeps the author's own bytes, so its format is not a free
+    /// choice. Accepting one would rewrite the header to describe a format the
+    /// payload is not in — the GPU would then read BC7 blocks as BC1.
+    /// </summary>
+    [Fact]
+    public void AFormatOverrideCannotDesynchroniseAMippedHeaderFromItsPayload()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        var entry = bundle.Textures.Single();
+
+        byte[] before;
+        using (var gpu = GpuResourceFile.Open(bundle.GpuResourcePath))
+        {
+            before = gpu.Read(entry.GpuOffset, entry.GpuSize);
+            var plan = OptimizationPlan.Build(bundle, gpu, maxDimension: 64);
+            var item = Assert.Single(plan.Textures);
+
+            Assert.False(item.SupportsFormatChange);
+
+            // Exactly what the grid's per-row dropdown does.
+            item.TargetFormat = DxgiFormat.Bc1Unorm;
+            Assert.Equal(DxgiFormat.Bc7Unorm, item.TargetFormat);
+
+            BundleOptimizer.Apply(plan, gpu, bundle.Path, bundle.GpuResourcePath, Fast);
+        }
+
+        var rebuilt = Bundle.Load(fixture.BundlePath);
+        var after = rebuilt.Textures.Single();
+        Assert.True(TextureResource.TryCreate(rebuilt, after, out var texture));
+
+        // The header must describe the bytes that were actually written, and the
+        // result must survive a reload.
+        Assert.Equal(DxgiFormat.Bc7Unorm, texture!.SourceFormat);
+        Assert.Null(texture.Unsupported);
+
+        var chain = DxgiFormat.Bc7Unorm.MipChain(256, 256, 9);
+        using var newGpu = GpuResourceFile.Open(rebuilt.GpuResourcePath);
+        Assert.Equal(before.AsSpan((int)chain.Take(2).Sum()).ToArray(),
+                     newGpu.Read(after.GpuOffset, after.GpuSize));
+    }
+
+    /// <summary>
+    /// A mipmapped uncompressed texture must not be recommended into a block
+    /// format: the payload would be sliced, not encoded, leaving raw RGBA bytes
+    /// under a BC7 header.
+    /// </summary>
+    [Fact]
+    public void AMippedUncompressedTextureIsNeverRecommendedIntoABlockFormat()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.R8G8B8A8Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+        var plan = OptimizationPlan.Build(bundle, gpu);
+
+        // Nothing to gain without a cap, so it is left alone rather than
+        // "optimised" into a format the slice path cannot produce.
+        Assert.Empty(plan.Textures);
+        Assert.Contains(plan.Skipped, s => s.Name == bundle.Textures.Single().Name);
+    }
+
+    /// <summary>Capping one still slices it, keeping its own format.</summary>
+    [Fact]
+    public void AMippedUncompressedTextureIsSlicedInItsOwnFormat()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.R8G8B8A8Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+        var plan = OptimizationPlan.Build(bundle, gpu, maxDimension: 64);
+        var item = Assert.Single(plan.Textures);
+
+        Assert.Equal(DxgiFormat.R8G8B8A8Unorm, item.TargetFormat);
+        Assert.Equal(64, item.TargetWidth);
+        Assert.Equal(2, item.MipLevelsToDrop);
+    }
 }

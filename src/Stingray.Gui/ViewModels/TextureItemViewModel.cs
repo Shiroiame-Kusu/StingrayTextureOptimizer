@@ -72,6 +72,16 @@ public sealed partial class TextureItemViewModel : ObservableObject
         set => TargetFormat = value.Value;
     }
 
+    /// <summary>Whether the format dropdown applies to this row at all.</summary>
+    public bool SupportsFormatChange => Item.SupportsFormatChange;
+
+    public string FormatChangeHint =>
+        Item.SupportsFormatChange
+            ? "Target block format."
+            : $"Fixed: this texture has {Item.Texture.MipMapCount} mip levels, so its "
+            + "payload is sliced out of the existing chain rather than re-encoded, "
+            + "and keeps the format it was authored in.";
+
     [ObservableProperty]
     private bool _include;
 
