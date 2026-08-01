@@ -241,7 +241,7 @@ public static class BundleOptimizer
             {
                 item.Texture.Header.Patch(
                     payload, item.TargetWidth, item.TargetHeight, item.TargetFormat,
-                    surfaceSize: 0, item.TargetMipCount);
+                    levelZeroSize: 0, item.TargetMipCount);
                 StingrayTexturePrefix.PatchDdsForStreaming(
                     payload, item.Texture.Header, item.TargetFormat, item.TargetWidth);
                 StingrayTexturePrefix.WriteStreaming(

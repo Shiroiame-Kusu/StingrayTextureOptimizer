@@ -92,12 +92,12 @@ public sealed class DdsHeader
     /// must start at the same position as the one passed to <see cref="TryRead"/>.
     /// </summary>
     public void Patch(Span<byte> payload, int width, int height, DxgiFormat format,
-                      long surfaceSize, int? mipMapCount = null)
+                      long levelZeroSize, int? mipMapCount = null)
     {
         if (!HasDx10Header)
             throw new NotSupportedException("Only DX10-style DDS headers can be rewritten.");
-        if (surfaceSize is < 0 or > uint.MaxValue)
-            throw new ArgumentOutOfRangeException(nameof(surfaceSize));
+        if (levelZeroSize is < 0 or > uint.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(levelZeroSize));
 
         var dds = payload[Offset..];
 
@@ -107,10 +107,19 @@ public sealed class DdsHeader
             ? (flags & ~FlagPitch) | FlagLinearSize
             : (flags & ~FlagLinearSize) | FlagPitch;
 
+        // dwPitchOrLinearSize means two different things under those two flags:
+        // the byte size of level 0 under DDSD_LINEARSIZE, and the bytes in a
+        // single row under DDSD_PITCH. The flag is chosen from the format here,
+        // so the value has to be as well — writing a whole surface size under
+        // DDSD_PITCH describes a texture one row tall.
+        var pitchOrLinearSize = format.IsBlockCompressed()
+            ? (uint)levelZeroSize
+            : (uint)(width * format.BytesPerPixel());
+
         BinaryPrimitives.WriteUInt32LittleEndian(dds[0x08..], flags);
         BinaryPrimitives.WriteUInt32LittleEndian(dds[0x0C..], (uint)height);
         BinaryPrimitives.WriteUInt32LittleEndian(dds[0x10..], (uint)width);
-        BinaryPrimitives.WriteUInt32LittleEndian(dds[0x14..], (uint)surfaceSize);
+        BinaryPrimitives.WriteUInt32LittleEndian(dds[0x14..], pitchOrLinearSize);
         BinaryPrimitives.WriteUInt32LittleEndian(dds[CoreHeaderLength..], (uint)format);
 
         if (mipMapCount is { } mips)
@@ -131,7 +140,7 @@ public sealed class DdsHeader
         Flags = flags;
         Width = width;
         Height = height;
-        PitchOrLinearSize = (uint)surfaceSize;
+        PitchOrLinearSize = pitchOrLinearSize;
         DxgiFormat = format;
     }
 

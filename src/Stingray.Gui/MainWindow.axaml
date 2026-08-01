@@ -192,7 +192,11 @@
       </Border>
       <TextBlock Grid.Row="2" Margin="0,10,0,4" FontWeight="SemiBold" Text="Skipped"
                  IsVisible="{Binding HasSkipped}" />
-      <ItemsControl Grid.Row="3" ItemsSource="{Binding Skipped}" MaxHeight="110">
+      <!-- An ItemsControl does not scroll on its own, so capping its height alone
+           would clip the list at whatever row crossed the limit with no way to
+           reach the rest. Real bundles skip dozens of textures. -->
+      <ScrollViewer Grid.Row="3" MaxHeight="110" VerticalScrollBarVisibility="Auto">
+      <ItemsControl ItemsSource="{Binding Skipped}">
         <ItemsControl.ItemTemplate>
           <DataTemplate x:DataType="opt:SkippedTexture">
             <TextBlock Opacity="0.65" FontSize="12" TextWrapping="Wrap">
@@ -205,6 +209,7 @@
           </DataTemplate>
         </ItemsControl.ItemTemplate>
       </ItemsControl>
+      </ScrollViewer>
     </Grid>
   </DockPanel>
 </Window>

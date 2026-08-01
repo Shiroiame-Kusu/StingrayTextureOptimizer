@@ -25,7 +25,13 @@ public sealed class GpuResourceFile : IDisposable
 
     public static GpuResourceFile Open(string path)
     {
-        var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
+        // FileShare.Delete matters on Windows: repacking writes a temporary file
+        // and renames it over this one, and the source is still open for reading
+        // while that happens. Without it the rename fails with a sharing
+        // violation and an in-place optimise cannot finish. It costs nothing on
+        // Unix, where a rename over an open file already works.
+        var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
+                                    FileShare.Read | FileShare.Delete,
                                     bufferSize: 1 << 20, FileOptions.RandomAccess);
         return new GpuResourceFile(path, stream);
     }
