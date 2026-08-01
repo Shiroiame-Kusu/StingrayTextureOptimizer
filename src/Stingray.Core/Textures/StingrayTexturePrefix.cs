@@ -34,19 +34,28 @@ public static class StingrayTexturePrefix
     public const int LevelEntrySize = 12;
 
     /// <summary>
-    /// Streaming flag for a chain of the given length.
+    /// Streaming flag to write for a texture carrying the given prefix id.
     /// </summary>
     /// <remarks>
-    /// Every streamed sample carries 1 or 2 here and nothing observed explains
-    /// which: the 53 available are only 21 distinct textures in 5 shapes, all
-    /// reached through mod bundles, because the shipped data is inside DSAR
-    /// containers this tool cannot read. The split that fits what there is puts
-    /// the 9- and 10-level textures on 2 and the rest on 1.
+    /// Measured over 1,259 distinct texture headers read out of the shipped
+    /// game data: 0 means not streamed, without exception across 555 of them,
+    /// and every one of the 704 streamed textures carries 1 or 2 — split 353 to
+    /// 351, which is as close to a coin toss as makes no difference.
     ///
-    /// This is the one value in the whole conversion that is a guess. If a
-    /// converted texture fails to load in game, this is what to change first.
+    /// Nothing in the header decides which. Five groups are identical in every
+    /// field there is — id, dimensions, format, level count, first resident
+    /// level and the whole mip table — and still differ here, so the value comes
+    /// from somewhere outside the texture. It can only be guessed at.
+    ///
+    /// The id is the best predictor available. Scored against those 704:
+    /// this rule is right 75.1% of the time, against 77.4% for the best any
+    /// id-based rule could manage, 50% for a constant, and 42.9% for the
+    /// mip-count rule this shipped with before the shipped data could be read.
+    /// It is still a guess. If a converted texture fails to load in game, this
+    /// is what to change first — and both values are attested for every texture
+    /// shape, so neither is obviously wrong for any particular texture.
     /// </remarks>
-    public static uint StreamingFlagFor(int mipCount) => mipCount >= 9 ? 2u : 1u;
+    public static uint StreamingFlagFor(uint prefixId) => prefixId == 0 ? 2u : 1u;
 
     /// <summary>Room for a level table before the DDS magic.</summary>
     public static bool CanDescribe(int prefixLength, int mipCount) =>
@@ -83,16 +92,21 @@ public static class StingrayTexturePrefix
         if (total > uint.MaxValue)
             throw new ArgumentOutOfRangeException(nameof(mipCount), "Mip chain exceeds 4 GiB.");
 
+        // Read before clearing: the id decides what the streaming flag should be,
+        // and it is about to be the only thing left of the old prefix.
+        var id = BinaryPrimitives.ReadUInt32LittleEndian(payload);
+
         // Clear from the flag on, so no stale table survives from whatever the
-        // texture was before — but leave the id at offset 0 alone. It is non-zero
-        // on 52 of 258 textures examined and on 13 of the 21 streamed ones, and it
-        // tracks neither format nor dimensions nor level count, so there is nothing
-        // to recompute it from. Whatever it means, an engine-authored streamed
-        // texture carries it, and a converted one has to as well.
+        // texture was before — but leave that id alone. Only 14 distinct values
+        // occur across the 704 streamed textures in the shipped data, shared by
+        // unrelated textures, and it tracks neither format nor dimensions nor
+        // level count, so there is nothing to recompute it from. Whatever it
+        // means, an engine-authored streamed texture carries it, and a converted
+        // one has to as well.
         payload[StreamingFlagOffset..prefixLength].Clear();
 
         BinaryPrimitives.WriteUInt32LittleEndian(
-            payload[StreamingFlagOffset..], StreamingFlagFor(mipCount));
+            payload[StreamingFlagOffset..], StreamingFlagFor(id));
         BinaryPrimitives.WriteUInt32LittleEndian(
             payload[FirstResidentMipOffset..], (uint)firstResidentMip);
         BinaryPrimitives.WriteUInt32LittleEndian(payload[ChainSizeOffset..], (uint)total);

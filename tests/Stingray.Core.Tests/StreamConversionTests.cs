@@ -135,8 +135,9 @@ public class StreamConversionTests
         var entry = rebuilt.Textures.Single();
         var payload = rebuilt.GetCpuPayload(entry);
 
-        Assert.Equal(2u, BinaryPrimitives.ReadUInt32LittleEndian(
-            payload[StingrayTexturePrefix.StreamingFlagOffset..]));         // 9 levels
+        Assert.Equal(StingrayTexturePrefix.StreamingFlagFor(SyntheticBundle.PrefixId),
+            BinaryPrimitives.ReadUInt32LittleEndian(
+                payload[StingrayTexturePrefix.StreamingFlagOffset..]));
         Assert.Equal(3u, BinaryPrimitives.ReadUInt32LittleEndian(
             payload[StingrayTexturePrefix.FirstResidentMipOffset..]));
 
@@ -214,14 +215,47 @@ public class StreamConversionTests
             rebuilt.StreamBackedFiles.Max(f => (long)f.StreamOffset + f.StreamSize));
     }
 
+    /// <summary>
+    /// Nothing in the header decides the streaming flag — textures identical in
+    /// every other field carry both values in the shipped data — so this is the
+    /// best guess available rather than a rule, and it follows the prefix id
+    /// because that predicts it better than anything else measured.
+    /// </summary>
     [Theory]
-    [InlineData(3, 1u)]
-    [InlineData(8, 1u)]
-    [InlineData(9, 2u)]
-    [InlineData(10, 2u)]
-    [InlineData(13, 2u)]
-    public void TheStreamingFlagFollowsTheObservedSplit(int mipCount, uint expected) =>
-        Assert.Equal(expected, StingrayTexturePrefix.StreamingFlagFor(mipCount));
+    [InlineData(0u, 2u)]
+    [InlineData(0x0172E796u, 1u)]
+    [InlineData(0xFCE7DA44u, 1u)]
+    [InlineData(0xA5CCAFA7u, 1u)]
+    public void TheStreamingFlagFollowsThePrefixId(uint prefixId, uint expected) =>
+        Assert.Equal(expected, StingrayTexturePrefix.StreamingFlagFor(prefixId));
+
+    /// <summary>
+    /// And the conversion writes what that says, off the id it just preserved.
+    /// </summary>
+    [Fact]
+    public void TheConversionWritesTheFlagThatMatchesTheId()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using (var gpu = GpuResourceFile.Open(bundle.GpuResourcePath))
+        {
+            var plan = OptimizationPlan.Build(bundle, gpu, streamFloor: 32);
+            BundleOptimizer.Apply(plan, gpu, bundle.Path, bundle.GpuResourcePath, Fast,
+                                  outputStreamPath: bundle.StreamPath);
+        }
+
+        var rebuilt = Bundle.Load(fixture.BundlePath);
+        var payload = rebuilt.GetCpuPayload(rebuilt.Textures.Single());
+        var id = BinaryPrimitives.ReadUInt32LittleEndian(payload);
+        var flag = BinaryPrimitives.ReadUInt32LittleEndian(
+            payload[StingrayTexturePrefix.StreamingFlagOffset..]);
+
+        Assert.Equal(SyntheticBundle.PrefixId, id);
+        Assert.Equal(StingrayTexturePrefix.StreamingFlagFor(id), flag);
+    }
 
     [Fact]
     public void AChainTooLongToDescribeIsLeftAlone()

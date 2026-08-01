@@ -516,11 +516,18 @@ first frame.
 
 **Why it is off by default.** The conversion has to write one field in the
 Stingray prefix whose meaning is not established: every streamed texture carries
-1 or 2 there, and the 53 samples available do not explain which. This tool
-writes 2 for chains of 9 levels or more and 1 otherwise, the split that fits
-what was observed. If a converted texture fails to load in game, that field is
-the first thing to change — see `docs/bundle-format.md`. Test before relying on
-it, and keep the backup.
+1 or 2 there, and **nothing in the texture decides which.** Reading 1,259 texture
+headers out of the shipped game data settles that it is not a matter of too few
+samples — textures identical in every header field, down to the whole mip table,
+carry both values, so whatever selects it is not in the texture.
+
+This tool writes 2 when the id at the start of the prefix is zero and 1
+otherwise, which matches the shipped data 75% of the time against a ceiling of
+77% for any rule based on that id. It is still a guess. Both values are attested
+for every texture shape, so neither is obviously wrong for any given texture, but
+if a converted texture fails to load in game that field is the first thing to
+change — see `docs/bundle-format.md`. Test before relying on it, and keep the
+backup.
 
 ### Collapse solid colours — `--no-collapse` disables (GUI: *Collapse solid colours*)
 

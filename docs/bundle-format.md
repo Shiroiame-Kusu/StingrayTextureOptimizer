@@ -4,6 +4,15 @@ Notes on the container used by Autodesk Stingray / Bitsquid games — Helldivers
 Darktide, Vermintide 2. Recovered by inspecting real bundles; everything here was
 confirmed against actual files, and anything unconfirmed is called out as such.
 
+Two independent sources sit behind this. The layouts were worked out here by
+inspection, and later checked against the
+[HD2 SDK](https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition), a Blender
+addon that reads and writes the same files. It agreed on the file table, the
+type table and the texture prefix, supplied the `DSAR` container layout that
+made the shipped game data readable at all, and got one field the wrong way
+round — see the mip table below. Where the two disagreed, the shipped data was
+asked and it decided.
+
 A bundle is up to three files that share a base name:
 
 | File | Contents |
@@ -75,9 +84,15 @@ Immediately follows the type table, at `0x48 + 32 * typeCount`.
 | 0x38 | u32 | CPU payload size |
 | 0x3C | u32 | Stream payload size |
 | 0x40 | u32 | GPU payload size |
-| 0x44 | u32 | Unknown (16 observed) |
-| 0x48 | u32 | Unknown (64 observed) |
+| 0x44 | u32 | Unknown (16 observed; the SDK defaults it to 16 too) |
+| 0x48 | u32 | Unknown (64 observed, and 64 is the GPU payload alignment) |
 | 0x4C | u32 | Entry index |
+
+This table is confirmed field for field by the HD2 SDK's `TocEntry`, including
+the two unknowns at 0x28 and 0x30, which it also leaves unnamed. The pair at
+0x44/0x48 defaults to 16 and 64 there, and the same pair with the same defaults
+appears in the type table — so they are plausibly alignments, one of which
+matches the 64-byte GPU payload alignment. That reading is unconfirmed.
 
 Entries are grouped by type, in the same order as the type table.
 
@@ -155,35 +170,50 @@ For a non-streamed texture everything from 0x04 on is zero apart from the
 `0xFFFFFFFF` at 0x08: no table is written at all.
 
 The id at 0x00 is the one field here that has to be carried across rather than
-rewritten. Across 258 textures in 6 mods, 52 carry a non-zero value — including
-13 of the 21 streamed ones — and it tracks neither format, nor dimensions, nor
-level count:
+rewritten. It is **a small enumeration, not a per-texture value**: only 14
+distinct values occur across the 704 streamed textures in the shipped data, and
+13 across the 555 non-streamed ones, shared freely between textures that have
+nothing else in common. The same values turn up in mod bundles.
 
-| id | textures | (format, levels) seen with it |
-| --- | --- | --- |
-| `0x00000000` | 206 | 28/1, 28/9, 61/1, 71/1, 98/1, 98/9, 99/1 |
-| `0x0172E796` | 23 | 98/3, 98/9, 98/10, 98/12, 98/13, 99/1 |
-| `0xC322A444` | 7 | 83/9, 99/1 |
-| `0xA5CCAFA7` | 7 | 98/9, 98/12 |
-| `0xFCE7DA44` | 6 | 71/12, 71/13, 99/1 |
+| id | streamed textures | flag 1 | flag 2 |
+| --- | --- | --- | --- |
+| `0x00000000` | 228 | 26 | 202 |
+| `0xFCE7DA44` | 118 | 89 | 29 |
+| `0xA5CCAFA7` | 91 | 60 | 31 |
+| `0x0172E796` | 56 | 44 | 12 |
+| `0x8C3BB092` | 55 | 27 | 28 |
 
-Nothing observed would let it be recomputed, so converting a texture to a
-streamed one writes the flag, the chain size and the table while leaving 0x00
-exactly as it was. Everything from 0x0C to the end of the prefix, on the other
-hand, is safe to rewrite: no non-streamed texture examined has a non-zero byte
-there, and no streamed one has a non-zero byte past the end of its level table.
+It correlates with the streaming flag — strongly enough to be the best predictor
+of it available — but does not determine it. Nothing observed would let it be
+recomputed, so converting a texture to a streamed one writes the flag, the chain
+size and the table while leaving 0x00 exactly as it was. Everything from 0x0C to
+the end of the prefix is safe to rewrite: no non-streamed texture examined has a
+non-zero byte there, and no streamed one has a non-zero byte past the end of its
+level table.
 
-Verified across 53 streamed textures — every level's dimensions, cumulative
-offset and remainder matched the chain reconstructed from the DDS header, with
-no exceptions.
+Verified across 704 streamed textures from the shipped game data — every level's
+dimensions, cumulative offset and remainder matched the chain reconstructed from
+the DDS header, with no exceptions.
 
-Those 53 all come from `.patch_N` bundles, which are mods, not from the shipped
-game data. They are still engine-authored: a patch carries entries it does not
-replace through verbatim, and streamed textures are exactly what mod tooling
-leaves alone. The base game's own bundles could not be read at all — see below.
+**Width comes before height.** This is worth stating explicitly because the two
+are indistinguishable on a square texture, and most textures are square. The
+[HD2 SDK](https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition) reads the
+pair the other way round, naming them `Height` then `Width` in
+`stingray/texture.py`. The shipped data settles it: across 310 non-square
+streamed textures there are 2,677 mip entries where the order is decidable, and
+**2,677 of them are width-first with no counterexamples.** A 256×64 BC-format
+texture, for instance, starts its table `256, 64`.
 
-At 12 bytes per entry the table has room for 14 levels
-(`0x14 + 14 × 12 = 0xBC`), which covers up to 8192×8192.
+The same source frames the whole thing differently and more naturally, as a flat
+array of 15 entries starting at 0x0C, each `u32 start, u32 bytesLeft, u16, u16`.
+That accounts for the same 192 bytes and explains two things this document
+described as quirks: the "always zero" u32 at 0x0C is simply the first level's
+start offset, and the "terminator" after the last level is just the first unused
+entry of a fixed-size array. Both framings read and write identical bytes.
+
+Fourteen levels is the most seen in the shipped data, and at 12 bytes an entry
+the table has room for exactly 15 (`0x0C + 15 × 12 = 0xC0`), which would cover
+16384×16384.
 
 ### Streaming: the field at prefix offset 8
 
@@ -260,26 +290,45 @@ whose peak the engine enforces.
 
 ### The field at prefix offset 4
 
-A streaming flag: zero for every non-streamed texture (498 of 498), non-zero for
-every streamed one (53 of 53).
+A streaming flag. Measured over **1,259 distinct texture headers read out of the
+shipped game data**:
 
-Only the values 1 and 2 have been observed and **what separates them is not
-known**. It does not follow from the mip count, the resident index, the format,
-the dimensions or the id at offset 0. The honest reason is sample poverty: those
-53 streamed textures are only 21 distinct file ids in 5 distinct shapes, all
-reached through `.patch_N` mod bundles rather than the shipped game data.
+| Value | Textures | Meaning |
+| --- | --- | --- |
+| 0 | 555 | Not streamed, without a single exception |
+| 1 | 353 | Streamed |
+| 2 | 351 | Streamed |
 
-| Flag | Observed on |
+So zero versus non-zero is settled. **What separates 1 from 2 is not, and it
+cannot be worked out from the texture at all.** Seventy-two distinct
+`(width, height, levels, format)` shapes occur with both values, and five groups
+are identical in *every* field the header has — the id at 0x00, the dimensions,
+the format, the level count, the first resident level and the entire mip table —
+and still differ here. Whatever selects it lives outside the texture.
+
+An earlier revision of this document blamed sample poverty for that. It was not
+sample poverty. With sixty times the data the answer is that the field is not a
+function of the texture.
+
+Candidate rules scored against those 704 streamed textures:
+
+| Rule | Correct |
 | --- | --- |
-| 1 | 4×4 BC7 (3 mips, resident 0); 512×512 BC7 (10 mips, resident 4) |
-| 2 | 256×256 BC5 and BC7 (9 mips, resident 3); 256×256 RGBA8 (9 mips, resident 4) |
+| `id == 0 → 2, else 1` | **75.1%** |
+| best any id-based rule could do | 77.4% |
+| always 1 | 50.1% |
+| always 2 | 49.9% |
+| `levels >= 9 → 2` (what this tool shipped in 0.1.1) | 42.9% |
 
-Anything converting a resident texture into a streamed one must pick a value
-here. This tool's `--stream` option writes 2 for chains of 9 levels or more and
-1 otherwise, which is the split that fits the observations — but it *is* a
-guess, which is why that option is off by default and documented as
-experimental. If a converted texture fails to load, this is the field to change
-first.
+The id at 0x00 is the best predictor there is, which is unsurprising if both
+fields come from the same piece of authoring metadata. So `--stream` now writes
+`2` when the preserved id is zero and `1` otherwise. That is a better-founded
+guess than the mip-count rule it replaces — which was worse than a coin toss —
+but it is still a guess. It stays off by default and experimental, and it is the
+first field to change if a converted texture fails to load.
+
+One thing does make the risk bounded: both values are attested for every texture
+shape, so neither is obviously invalid for any particular texture.
 
 This matters for memory rather than disk. A 4096×4096 BC7 texture with a full
 13-level chain is 21.3 MiB; if the field says `0xFFFFFFFF`, all of it is resident
@@ -313,15 +362,19 @@ since sampling a constant texture gives the same result at any resolution.
 
 ## The shipped game data: `DSAR`
 
-Only `.patch_N` bundles are readable with the layout above. Those are mods. The
-game's own data is in two other shapes, neither of which this tool can open:
+The game's own data is not in the layout above. It is in two other shapes:
 
 - 30 `bundles.NN.nxa` archives, roughly 21 GB in total
 - around a dozen loose hash-named files with large `.stream` siblings
 
-Both begin `DSAR`, almost certainly "DirectStorage archive" — `bin/` ships
-`dstorage.dll` and `dstoragecore.dll` and no Oodle library, which points at
-GDeflate as the codec.
+Both begin `DSAR`. The name suggests "DirectStorage archive", and `bin/` does
+ship `dstorage.dll` and `dstoragecore.dll` — which is why an earlier revision of
+this document guessed GDeflate as the codec. **That guess was wrong.** The
+chunks are plain **LZ4 block**, which the
+[HD2 SDK](https://github.com/Boxofbiscuits97/HD2SDK-CommunityEdition) decodes in
+`utils/slim.py`, and which `LZ4_decompress_safe` from a stock liblz4 reproduces
+byte for byte: every container in `data/` decompresses to a bundle whose first
+four bytes are `0xF0000011`.
 
 The container header decodes cleanly:
 
@@ -336,9 +389,27 @@ The container header decodes cleanly:
 | 0x20 | 32 × n | Chunk table |
 
 That arithmetic is exact on every sample (`90656 − 32 = 2832 × 32`,
-`4768 − 32 = 148 × 32`, `64 − 32 = 1 × 32`), and the bundle magic `0xF0000011`
-does appear in the raw bytes, so the payload is chunked rather than encrypted.
-Body entropy is about 5.7 bits per byte.
+`4768 − 32 = 148 × 32`, `64 − 32 = 1 × 32`).
 
-Reading it needs a GDeflate decoder, which is why the streaming flag above is
-still undecoded: the variety that would settle it is in here.
+Each 32-byte chunk table entry:
+
+| Offset | Type | Field |
+| --- | --- | --- |
+| 0x00 | u64 | Offset of this chunk in the decompressed stream |
+| 0x08 | u64 | Offset of this chunk's bytes in the container |
+| 0x10 | u32 | Decompressed size |
+| 0x14 | u32 | Compressed size |
+| 0x18 | u8 | Compression: 0 = stored, 3 = LZ4 block |
+| 0x19 | u8 | Chunk flags: 0x01 unknown, 0x02 starts a resource, 0x04 continues one |
+| 0x1A | 6 | Padding |
+
+A `bundles.NN.nxa` holds many bundles end to end in its decompressed stream.
+`bundles.nxa` is the index that says where each one starts: bundle count at
+0x0C, package count at 0x10, then 0x18-byte package records from 0x18 —
+`u64 size`, `u32 name offset`, `u32 item count`, `u32 item offset` — and
+0x10-byte items giving the archive offset, the offset within the decompressed
+stream, and the container number at byte 0x0F.
+
+This is what makes the shipped data readable, and everything below about the
+streaming flag comes from reading it: 1,259 distinct texture headers, against
+the 21 that mod bundles alone could offer.

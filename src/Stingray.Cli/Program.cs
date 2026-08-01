@@ -292,8 +292,9 @@ internal static class Program
                               the disk cost goes up. Try --stream 256 first.
                               Only reaches textures that have a chain; pair it with
                               --add-mips for the ones that shipped without.
-                              One field this writes is not fully understood; test in
-                              game before relying on it, and keep the backup.
+                              One field this writes cannot be derived from the texture,
+                              so it is a best guess; test in game before relying on
+                              it, and keep the backup.
           --max-size <n>      cap texture dimensions at n (power of two); larger ones are
                               halved until they fit. The plan reports the measured
                               detail cost per texture before you commit.

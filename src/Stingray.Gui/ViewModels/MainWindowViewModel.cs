@@ -59,7 +59,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>
     /// Every resident floor mip streaming could offer. Off by default: the
-    /// conversion writes one field whose meaning is not fully established, so it
+    /// conversion writes one field that cannot be derived from the texture, so it
     /// needs testing in game before anyone relies on it.
     /// </summary>
     private static readonly StreamFloor[] AllStreamFloors =
