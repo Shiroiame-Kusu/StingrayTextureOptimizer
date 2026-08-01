@@ -56,7 +56,8 @@ internal static class Program
 
         var plan = OptimizationPlan.Build(bundle, gpu, options.Strategy, !options.NoCollapse,
                                           maxDimension: options.MaxDimension, mipMode: options.MipMode,
-                                          streamFloor: options.StreamFloor);
+                                          streamFloor: options.StreamFloor,
+                                          generateMips: options.AddMips);
         plan.Deduplicate = !options.NoDedup;
         PrintPlan(plan);
         return 0;
@@ -69,7 +70,8 @@ internal static class Program
 
         var plan = OptimizationPlan.Build(bundle, gpu, options.Strategy, !options.NoCollapse,
                                           maxDimension: options.MaxDimension, mipMode: options.MipMode,
-                                          streamFloor: options.StreamFloor);
+                                          streamFloor: options.StreamFloor,
+                                          generateMips: options.AddMips);
         plan.Deduplicate = !options.NoDedup;
         PrintPlan(plan);
 
@@ -172,6 +174,10 @@ internal static class Program
                             + $"entry already has, wasting {Human(plan.RedundantBytes)}. "
                             + "These are stored once and shared.");
 
+        if (plan.GeneratedChainCount > 0)
+            Console.WriteLine($"\nmipmaps: {plan.GeneratedChainCount} texture(s) shipped without a mip "
+                            + "chain and are being given one. They will stop shimmering at distance.");
+
         if (plan.StreamConversionCount > 0)
             Console.WriteLine($"\nstreaming: {plan.StreamConversionCount} texture(s) move their whole mip "
                             + $"chain into .stream, adding {Human(plan.AddedStreamBytes)} on disk. "
@@ -264,6 +270,11 @@ internal static class Program
                               and leaves the texture mipmapped; single keeps one
                               level and nothing else, which is smaller but brings
                               back shimmering when the texture is minified
+          --add-mips          build a mip chain for textures that shipped without one.
+                              Stops them shimmering when minified, and makes them
+                              streamable. On its own it costs about a third more
+                              video memory, so it pays off combined with --stream.
+                              Re-encodes, so it is off by default.
           --stream <n>        EXPERIMENTAL, off by default. Move a mipmapped texture's
                               whole chain into .stream and keep only levels of n or
                               smaller resident. Nothing is discarded and nothing is

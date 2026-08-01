@@ -23,6 +23,15 @@ public sealed class DdsHeader
     public const uint FlagLinearSize = 0x8_0000;
     public const uint PixelFormatFourCc = 0x4;
 
+    // dwCaps. Real bundles carry TEXTURE alone for a single surface and
+    // TEXTURE|COMPLEX|MIPMAP for a chain, so the level count and these bits have
+    // to be changed together.
+    public const uint CapsComplex = 0x8;
+    public const uint CapsTexture = 0x1000;
+    public const uint CapsMipMap = 0x40_0000;
+
+    private const int CapsOffset = 0x6C;
+
     public const int CoreHeaderLength = 128;       // magic + DDS_HEADER
     public const int Dx10HeaderLength = 20;
 
@@ -108,6 +117,15 @@ public sealed class DdsHeader
         {
             BinaryPrimitives.WriteUInt32LittleEndian(dds[0x1C..], (uint)mips);
             MipMapCount = mips;
+
+            // Keep dwCaps in step with the level count. A surface that says it has
+            // one level while still flagged MIPMAP, or a chain that is not, is a
+            // header describing something the payload is not.
+            var caps = BinaryPrimitives.ReadUInt32LittleEndian(dds[CapsOffset..]) | CapsTexture;
+            caps = mips > 1
+                ? caps | CapsComplex | CapsMipMap
+                : caps & ~(CapsComplex | CapsMipMap);
+            BinaryPrimitives.WriteUInt32LittleEndian(dds[CapsOffset..], caps);
         }
 
         Flags = flags;

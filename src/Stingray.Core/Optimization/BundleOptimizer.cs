@@ -71,13 +71,40 @@ public static class BundleOptimizer
             var entry = item.Texture.Entry;
             var surface = sourceGpu.Read(entry.GpuOffset, entry.GpuSize);
 
-            // Converting to a streamed texture discards nothing: the whole chain
-            // goes to .stream and the tail below the resident level is what stays
-            // in video memory. Both are slices of what is already there.
+            // Building a chain the texture never had is the one path here that
+            // produces levels rather than moving them, so it is an encode all the
+            // way down. When it is also streamed, the whole new chain goes to
+            // .stream and the tail below the resident level stays behind.
+            if (item.GeneratesMips)
+            {
+                var built = TextureEncoder.EncodeChain(
+                    surface,
+                    item.Texture.Width, item.Texture.Height, item.Texture.SourceFormat,
+                    item.TargetWidth, item.TargetHeight, item.TargetFormat,
+                    item.TargetMipCount, encodeOptions);
+
+                if (item.IsStreamConversion)
+                {
+                    var levels = item.TargetFormat.MipChain(
+                        item.TargetWidth, item.TargetHeight, item.TargetMipCount);
+                    var keepResident = (int)levels.Take(item.StreamResidentMip!.Value).Sum();
+                    streamPayloads[entry.FileId] = built;
+                    encoded[entry.FileId] = built.AsSpan(keepResident).ToArray();
+                }
+                else
+                {
+                    encoded[entry.FileId] = built;
+                }
+
+                continue;
+            }
+
+            // Converting an existing chain to a streamed one discards nothing: the
+            // levels above the size cap are dropped outright, what is left goes to
+            // .stream, and the tail below the floor also stays resident. Both are
+            // slices of what is already there.
             if (item.IsStreamConversion)
             {
-                // Levels above the size cap are dropped outright; what is left goes
-                // to .stream, and the tail below the floor also stays resident.
                 var chain = item.Texture.MipChain;
                 var dropped = (int)chain.Take(item.MipLevelsToDrop).Sum();
                 var untilResident = (int)chain
@@ -224,10 +251,12 @@ public static class BundleOptimizer
                 continue;
             }
 
-            // For a sliced chain the DDS "linear size" describes the new level 0,
-            // not the whole payload, and the level count shrinks with it.
-            var mips = item.IsMipDrop ? item.TargetMipCount : (int?)null;
-            var linearSize = item.IsMipDrop
+            // Whenever the payload is a chain — sliced or newly built — the DDS
+            // "linear size" describes level 0 rather than the whole payload, and
+            // the level count has to say how many there are.
+            var describesChain = item.IsMipDrop || item.GeneratesMips;
+            var mips = describesChain ? item.TargetMipCount : (int?)null;
+            var linearSize = describesChain
                 ? item.TargetFormat.SurfaceSize(item.TargetWidth, item.TargetHeight)
                 : newOffsets[entry.FileId].Size;
 

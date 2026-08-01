@@ -143,5 +143,12 @@ public sealed class FormatRecommendation
     /// </summary>
     public int? StreamResidentMip { get; init; }
 
+    /// <summary>
+    /// Whether a mip chain is being built for a texture that shipped without one.
+    /// The levels do not exist yet, so unlike every other path here they are
+    /// generated rather than sliced out of what is already there.
+    /// </summary>
+    public bool GeneratesMips { get; init; }
+
     public long PredictedSize => Format.SurfaceSize(Width, Height);
 }

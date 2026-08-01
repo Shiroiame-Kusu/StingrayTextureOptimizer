@@ -112,6 +112,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     [ObservableProperty] private string _progressText = "";
     [ObservableProperty] private bool _collapseSolidColours = true;
     [ObservableProperty] private bool _deduplicate = true;
+
+    /// <summary>
+    /// Build a mip chain for textures that shipped without one. Off by default: it
+    /// re-encodes, and on its own it costs video memory rather than saving it.
+    /// </summary>
+    [ObservableProperty] private bool _addMips;
     [ObservableProperty] private BackendChoice _encoder = new(EncoderBackend.Auto, "Automatic");
 
     /// <summary>
@@ -199,6 +205,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var strategy = Strategy.Value;
             var mips = MipSelection.Value;
             var floor = StreamFloor.Value;
+            var addMips = AddMips;
             var (plan, bundle) = await Task.Run(() =>
             {
                 var loaded = Bundle.Load(path);
@@ -209,7 +216,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 using var gpu = GpuResourceFile.Open(loaded.GpuResourcePath);
                 return (OptimizationPlan.Build(loaded, gpu, strategy, CollapseSolidColours,
                                                maxDimension: cap, mipMode: mips,
-                                               streamFloor: floor), loaded);
+                                               streamFloor: floor,
+                                               generateMips: addMips), loaded);
             });
 
             _bundle = bundle;
@@ -349,6 +357,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     /// <summary>Re-runs analysis when the strategy changes, so the grid stays in sync.</summary>
     partial void OnStrategyChanged(StrategyChoice value)
+    {
+        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
+    }
+
+    partial void OnAddMipsChanged(bool value)
     {
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }

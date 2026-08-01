@@ -82,6 +82,10 @@
                     MinWidth="180" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
 
+        <CheckBox Content="Generate mipmaps"
+                  IsChecked="{Binding AddMips}" IsEnabled="{Binding !IsBusy}"
+                  ToolTip.Tip="Builds a mip chain for textures that shipped without one, which many mods do.&#x0a;Those textures shimmer and crawl when seen at an angle or from a distance, because the GPU has no smaller level to sample. This fixes that.&#x0a;On its own it costs about a third more video memory, since the chain below the top level adds up to that.&#x0a;It pays for itself with Stream mips: once a chain exists the texture can be streamed, and only the small levels need to stay resident.&#x0a;This one re-encodes, so it is not lossless." />
+
         <CheckBox Content="Collapse solid colours"
                   IsChecked="{Binding CollapseSolidColours}" IsEnabled="{Binding !IsBusy}"
                   ToolTip.Tip="A texture whose every pixel is identical is rewritten at 16x16.&#x0a;Visually lossless: a constant texture samples the same at any resolution.&#x0a;Saves both file size and video memory." />

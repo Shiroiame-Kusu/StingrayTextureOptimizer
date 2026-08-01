@@ -97,6 +97,89 @@ public static class TextureEncoder
     }
 
     /// <summary>
+    /// Builds a whole mip chain from a single surface, largest level first, laid
+    /// out exactly as <see cref="DxgiFormatInfo.MipChain"/> describes it.
+    /// </summary>
+    /// <remarks>
+    /// Each level is resampled from the one above rather than from level 0, which
+    /// is the usual construction and keeps the successive halvings cheap.
+    ///
+    /// Levels below 4x4 are always encoded by the managed backend: CMP_Core works
+    /// on whole 4x4 blocks and rejects anything smaller, while the block itself
+    /// still has to be written because a chain runs down to 1x1.
+    /// </remarks>
+    public static byte[] EncodeChain(
+        ReadOnlySpan<byte> surface,
+        int sourceWidth,
+        int sourceHeight,
+        DxgiFormat sourceFormat,
+        int targetWidth,
+        int targetHeight,
+        DxgiFormat targetFormat,
+        int mipCount,
+        EncodeOptions? options = null)
+    {
+        if (mipCount < 1) throw new ArgumentOutOfRangeException(nameof(mipCount));
+        options ??= new EncodeOptions();
+
+        var rgba = TextureDecoder.ToRgba(surface, sourceWidth, sourceHeight, sourceFormat);
+        if (targetWidth != sourceWidth || targetHeight != sourceHeight)
+            rgba = Resample(rgba, sourceWidth, sourceHeight, targetWidth, targetHeight);
+
+        var chain = targetFormat.MipChain(targetWidth, targetHeight, mipCount);
+        var result = new byte[chain.Sum()];
+
+        int w = targetWidth, h = targetHeight;
+        long cursor = 0;
+
+        for (var level = 0; level < mipCount; level++)
+        {
+            if (level > 0)
+            {
+                var nw = Math.Max(1, w >> 1);
+                var nh = Math.Max(1, h >> 1);
+                rgba = Resample(rgba, w, h, nw, nh);
+                w = nw;
+                h = nh;
+            }
+
+            var forLevel = w < 4 || h < 4
+                ? new EncodeOptions
+                {
+                    Quality = options.Quality,
+                    ThreadCount = options.ThreadCount,
+                    Backend = EncoderBackend.Managed,
+                }
+                : options;
+
+            var encoded = Encode(rgba, w, h, DxgiFormat.R8G8B8A8Unorm, w, h, targetFormat, forLevel);
+            if (encoded.LongLength != chain[level])
+                throw new InvalidOperationException(
+                    $"Level {level} came back as {encoded.LongLength} bytes for {w}x{h} "
+                  + $"{targetFormat.DisplayName()}, expected {chain[level]}.");
+
+            encoded.CopyTo(result.AsSpan((int)cursor));
+            cursor += encoded.Length;
+        }
+
+        return result;
+    }
+
+    /// <summary>Levels a full chain down to 1x1 needs.</summary>
+    public static int FullMipCount(int width, int height)
+    {
+        var levels = 1;
+        while (Math.Max(width, height) > 1)
+        {
+            width = Math.Max(1, width >> 1);
+            height = Math.Max(1, height >> 1);
+            levels++;
+        }
+
+        return levels;
+    }
+
+    /// <summary>
     /// Area-average resample. Box filtering is the right default here: these are
     /// mostly masks and albedo maps where a sharper kernel would add ringing.
     /// </summary>

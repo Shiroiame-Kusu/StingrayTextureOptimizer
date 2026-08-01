@@ -70,11 +70,23 @@ public sealed class TexturePlanItem
     public bool IsStreamConversion => StreamResidentMip is not null;
 
     /// <summary>
+    /// True when a mip chain is being built for a texture that shipped without
+    /// one. These levels are generated rather than sliced, so the whole texture is
+    /// re-encoded and the target describes it, not the source.
+    /// </summary>
+    public bool GeneratesMips { get; set; }
+
+    /// <summary>The chain this texture ends up with, generated or sliced.</summary>
+    private long[] TargetChain => TargetFormat.MipChain(TargetWidth, TargetHeight, TargetMipCount);
+
+    /// <summary>
     /// Bytes this texture will occupy in <c>.stream</c>: everything that survives
     /// the size cap, which is what the engine can load back on demand.
     /// </summary>
     public long PredictedStreamSize =>
-        IsStreamConversion ? Texture.MipChain.Skip(MipLevelsToDrop).Sum() : 0;
+        !IsStreamConversion ? 0
+        : GeneratesMips ? TargetChain.Sum()
+        : Texture.MipChain.Skip(MipLevelsToDrop).Sum();
 
     /// <summary>
     /// True when the payload is sliced out of the existing chain rather than
@@ -98,6 +110,13 @@ public sealed class TexturePlanItem
         get
         {
             if (!Include) return CurrentSize;
+
+            // A generated chain does not exist in the source, so its cost has to
+            // come from the target rather than from what is already there.
+            if (GeneratesMips)
+                return IsStreamConversion
+                    ? TargetChain.Skip(StreamResidentMip!.Value).Sum()
+                    : TargetChain.Sum();
 
             // A streamed texture keeps only its tail resident. Levels above the
             // size cap are gone for good; the rest are still there, just in
@@ -128,6 +147,7 @@ public sealed class TexturePlanItem
         MipLevelsToDrop = Recommendation.MipLevelsToDrop;
         TargetMipCount = Recommendation.TargetMipCount;
         StreamResidentMip = Recommendation.StreamResidentMip;
+        GeneratesMips = Recommendation.GeneratesMips;
         Include = true;
     }
 }
@@ -256,6 +276,9 @@ public sealed class OptimizationPlan
 
     public long PredictedFootprintSaving => CurrentGpuFootprint - PredictedGpuFootprint;
 
+    /// <summary>Textures being given a mip chain they did not have.</summary>
+    public int GeneratedChainCount => Textures.Count(t => t.Include && t.GeneratesMips);
+
     /// <summary>Textures being moved into <c>.stream</c>.</summary>
     public int StreamConversionCount => Textures.Count(t => t.Include && t.IsStreamConversion);
 
@@ -284,6 +307,7 @@ public sealed class OptimizationPlan
         int maxDimension = 0,
         MipMode mipMode = MipMode.KeepChain,
         int streamFloor = 0,
+        bool generateMips = false,
         CancellationToken cancellationToken = default)
     {
         var items = new List<TexturePlanItem>();
@@ -336,7 +360,7 @@ public sealed class OptimizationPlan
             var recommendation = TextureAnalyzer.Recommend(
                 analysis, texture.Width, texture.Height, strategy, collapseSolidColours,
                 maxDimension, texture.SourceFormat, texture.MipMapCount, mipMode,
-                streamFloor, texture.Header.Offset);
+                streamFloor, texture.Header.Offset, generateMips);
 
             var item = new TexturePlanItem
             {

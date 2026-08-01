@@ -93,8 +93,21 @@ public static class TextureAnalyzer
         int mipCount = 1,
         MipMode mipMode = MipMode.KeepChain,
         int streamFloor = 0,
-        int prefixLength = 0)
+        int prefixLength = 0,
+        bool generateMips = false)
     {
+        // A texture that shipped without a mip chain can have one built. That
+        // costs a third more video memory on its own — the chain below level 0
+        // adds up to that — and pays for itself twice over: the texture stops
+        // shimmering when minified, and it becomes streamable, which is where the
+        // memory actually goes back.
+        if (generateMips && mipCount == 1 && sourceFormat.IsSizable())
+        {
+            var generated = Generate(analysis, width, height, strategy, collapseSolidColours,
+                                     maxDimension, sourceFormat, streamFloor, prefixLength);
+            if (generated is not null) return generated;
+        }
+
         // Streaming composes with the size cap rather than overriding it. The cap
         // discards levels above it for good, which is the only part that costs
         // quality; what remains goes to .stream and only the tail below the floor
@@ -281,6 +294,58 @@ public static class TextureAnalyzer
             Height = h,
             IsLossless = false,
             Rationale = note is null ? reason : $"{reason}; {note}",
+        };
+    }
+
+    /// <summary>
+    /// Builds the recommendation for a texture that is getting a mip chain it
+    /// never had, or null when there is nothing to gain.
+    /// </summary>
+    /// <remarks>
+    /// The format and dimensions come from the ordinary recommendation for the
+    /// same texture, so generating a chain composes with compressing and capping
+    /// rather than replacing them: an uncompressed 4096 surface becomes BC7,
+    /// capped if asked, and then given levels all the way down.
+    /// </remarks>
+    private static FormatRecommendation? Generate(
+        TextureAnalysis analysis, int width, int height, OptimizationStrategy strategy,
+        bool collapseSolidColours, int maxDimension, DxgiFormat sourceFormat,
+        int streamFloor, int prefixLength)
+    {
+        // Ask what this texture would become with no chain involved, then build a
+        // chain for that.
+        var flat = Recommend(analysis, width, height, strategy, collapseSolidColours,
+                             maxDimension, sourceFormat);
+
+        // A solid colour collapsed to 16x16 samples the same at every level, so a
+        // chain would be pure overhead.
+        if (analysis.IsSolidColour && collapseSolidColours) return null;
+
+        var levels = TextureEncoder.FullMipCount(flat.Width, flat.Height);
+        if (levels <= 1 || !StingrayTexturePrefix.CanDescribe(prefixLength, levels)) return null;
+
+        var chain = flat.Format.MipChain(flat.Width, flat.Height, levels);
+        var resident = streamFloor > 0
+            ? DxgiFormatInfo.LevelsToDrop(flat.Width, flat.Height, levels, streamFloor)
+            : 0;
+
+        var note = resident > 0
+            ? $"and streamed, leaving {Math.Max(1, flat.Width >> resident)}x"
+            + $"{Math.Max(1, flat.Height >> resident)} and below resident "
+            + $"({chain.Skip(resident).Sum():N0} bytes)"
+            : $"costing {chain.Sum() - chain[0]:N0} bytes more, and stops it shimmering "
+            + "when minified";
+
+        return new FormatRecommendation
+        {
+            Format = flat.Format,
+            Width = flat.Width,
+            Height = flat.Height,
+            TargetMipCount = levels,
+            GeneratesMips = true,
+            StreamResidentMip = resident > 0 ? resident : null,
+            IsLossless = false,
+            Rationale = $"{flat.Rationale}; given a {levels}-level mip chain {note}",
         };
     }
 

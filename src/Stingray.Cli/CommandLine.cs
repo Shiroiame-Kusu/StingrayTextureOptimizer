@@ -26,6 +26,12 @@ internal sealed class CommandLine
     /// default: the streaming flag it has to write is not fully understood.
     /// </summary>
     public int StreamFloor { get; private init; }
+
+    /// <summary>
+    /// Build a mip chain for textures that shipped without one. Off by default:
+    /// it re-encodes, and on its own it costs video memory rather than saving it.
+    /// </summary>
+    public bool AddMips { get; private init; }
     public EncoderBackend Backend { get; private init; } = EncoderBackend.Auto;
     public MipMode MipMode { get; private init; } = MipMode.KeepChain;
     public OptimizationStrategy Strategy { get; private init; } = OptimizationStrategy.Balanced;
@@ -40,6 +46,7 @@ internal sealed class CommandLine
         int? threads = null;
         var maxDimension = 0;
         var streamFloor = 0;
+        var addMips = false;
         var backend = EncoderBackend.Auto;
         var mipMode = MipMode.KeepChain;
         bool dryRun = false, noCollapse = false, noDedup = false;
@@ -61,6 +68,7 @@ internal sealed class CommandLine
                 case "--threads": threads = ParseThreads(Next(it, arg)); break;
                 case "--max-size": maxDimension = ParseMaxSize(Next(it, arg)); break;
                 case "--stream": streamFloor = ParseStreamFloor(Next(it, arg)); break;
+                case "--add-mips": addMips = true; break;
                 case "--encoder": backend = ParseBackend(Next(it, arg)); break;
                 case "--mips": mipMode = ParseMipMode(Next(it, arg)); break;
                 case "--strategy": strategy = ParseStrategy(Next(it, arg)); break;
@@ -80,7 +88,7 @@ internal sealed class CommandLine
             Path = path, Output = output, Backup = backup, Original = original,
             Threads = threads, DryRun = dryRun, NoCollapse = noCollapse, NoDedup = noDedup,
             Strategy = strategy, Quality = quality, MaxDimension = maxDimension,
-            Backend = backend, MipMode = mipMode, StreamFloor = streamFloor,
+            Backend = backend, MipMode = mipMode, StreamFloor = streamFloor, AddMips = addMips,
         };
     }
 
