@@ -154,9 +154,14 @@ The final level terminates with both u32s zero rather than `(total, 0)`.
 For a non-streamed texture everything from 0x04 on is zero apart from the
 `0xFFFFFFFF` at 0x08: no table is written at all.
 
-Verified across 53 streamed textures drawn from the game's own bundles and from
-mods — every level's dimensions, cumulative offset and remainder matched the
-chain reconstructed from the DDS header, with no exceptions.
+Verified across 53 streamed textures — every level's dimensions, cumulative
+offset and remainder matched the chain reconstructed from the DDS header, with
+no exceptions.
+
+Those 53 all come from `.patch_N` bundles, which are mods, not from the shipped
+game data. They are still engine-authored: a patch carries entries it does not
+replace through verbatim, and streamed textures are exactly what mod tooling
+leaves alone. The base game's own bundles could not be read at all — see below.
 
 At 12 bytes per entry the table has room for 14 levels
 (`0x14 + 14 × 12 = 0xBC`), which covers up to 8192×8192.
@@ -197,8 +202,8 @@ every streamed one (53 of 53).
 Only the values 1 and 2 have been observed and **what separates them is not
 known**. It does not follow from the mip count, the resident index, the format,
 the dimensions or the id at offset 0. The honest reason is sample poverty: those
-53 streamed textures are only 21 distinct file ids in 5 distinct shapes, because
-the game's bundles and the mods that patch them share the same assets.
+53 streamed textures are only 21 distinct file ids in 5 distinct shapes, all
+reached through `.patch_N` mod bundles rather than the shipped game data.
 
 | Flag | Observed on |
 | --- | --- |
@@ -237,3 +242,35 @@ whole channels are constant: an unused normal map slot filled with (127,127,255)
 or a mask that is solid black everywhere. Those compress to almost nothing, and a
 solid-colour surface can be collapsed to 16×16 with no visible change at all,
 since sampling a constant texture gives the same result at any resolution.
+
+## The shipped game data: `DSAR`
+
+Only `.patch_N` bundles are readable with the layout above. Those are mods. The
+game's own data is in two other shapes, neither of which this tool can open:
+
+- 30 `bundles.NN.nxa` archives, roughly 21 GB in total
+- around a dozen loose hash-named files with large `.stream` siblings
+
+Both begin `DSAR`, almost certainly "DirectStorage archive" — `bin/` ships
+`dstorage.dll` and `dstoragecore.dll` and no Oodle library, which points at
+GDeflate as the codec.
+
+The container header decodes cleanly:
+
+| Offset | Type | Field |
+| --- | --- | --- |
+| 0x00 | char[4] | `DSAR` |
+| 0x04 | u32 | Version, `0x00010003` in every file seen |
+| 0x08 | u32 | Chunk count |
+| 0x0C | u32 | Offset of the first chunk's data, always `0x20 + 0x20 × chunkCount` |
+| 0x10 | u64 | Total decompressed size |
+| 0x18 | char[8] | `PADDING*` |
+| 0x20 | 32 × n | Chunk table |
+
+That arithmetic is exact on every sample (`90656 − 32 = 2832 × 32`,
+`4768 − 32 = 148 × 32`, `64 − 32 = 1 × 32`), and the bundle magic `0xF0000011`
+does appear in the raw bytes, so the payload is chunked rather than encrypted.
+Body entropy is about 5.7 bits per byte.
+
+Reading it needs a GDeflate decoder, which is why the streaming flag above is
+still undecoded: the variety that would settle it is in here.
