@@ -58,11 +58,14 @@
                     MinWidth="130" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
 
+        <!-- Disabled while streaming is on: a streamed texture keeps its whole
+             chain, so there is nothing to drop and the choice would not apply. -->
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="What to do with a texture that carries a mip chain.&#x0a;Keep smaller levels: discard only the levels above the cap. The texture stays mipmapped, so it will not shimmer at distance.&#x0a;Keep one level only: throw the chain away and keep a single image. Smaller, but minified surfaces shimmer and sample less efficiently.&#x0a;Either way the pixels are the author's own: nothing is re-encoded.">
-          <TextBlock Text="Mip levels" VerticalAlignment="Center" />
+                    ToolTip.Tip="{Binding MipModeHint}">
+          <TextBlock Text="Mip levels" VerticalAlignment="Center"
+                     IsEnabled="{Binding CanChooseMipMode}" />
           <ComboBox ItemsSource="{Binding MipModes}" SelectedItem="{Binding MipSelection}"
-                    MinWidth="170" IsEnabled="{Binding !IsBusy}" />
+                    MinWidth="170" IsEnabled="{Binding CanChooseMipMode}" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"

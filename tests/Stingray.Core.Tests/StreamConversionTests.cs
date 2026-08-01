@@ -234,4 +234,40 @@ public class StreamConversionTests
         Assert.Equal(before.Read(streamed.StreamOffset, streamed.StreamSize),
                      after.Read(streamed.StreamOffset, streamed.StreamSize));
     }
+
+    /// <summary>
+    /// A floor at or above the texture's own size would leave every level
+    /// resident and still write a second copy into .stream: the whole disk cost
+    /// for no saving at all.
+    /// </summary>
+    [Theory]
+    [InlineData(2048)]   // larger than the texture
+    [InlineData(256)]    // exactly the texture
+    public void AFloorThatSavesNothingIsNotConverted(int floor)
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+        var plan = OptimizationPlan.Build(bundle, gpu, streamFloor: floor);
+
+        Assert.Equal(0, plan.StreamConversionCount);
+        Assert.Equal(0, plan.AddedStreamBytes);
+        Assert.All(plan.Textures, t => Assert.False(t.IsStreamConversion));
+    }
+
+    /// <summary>A floor below the texture still converts, as the contrast.</summary>
+    [Fact]
+    public void AFloorThatSavesSomethingStillConverts()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(256, 256, DxgiFormat.Bc7Unorm, 9)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+        Assert.Equal(1, OptimizationPlan.Build(bundle, gpu, streamFloor: 128).StreamConversionCount);
+    }
 }

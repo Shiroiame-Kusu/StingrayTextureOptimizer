@@ -100,10 +100,18 @@ public static class TextureAnalyzer
         // collapses while the full-resolution levels remain available. Nothing is
         // discarded and nothing is re-encoded, so unlike a mip drop it costs no
         // quality at all — only disk.
-        if (streamFloor > 0 && mipCount > 1 && sourceFormat.IsSizable()
-            && StingrayTexturePrefix.CanDescribe(prefixLength, mipCount))
+        //
+        // A floor at or above the texture's own size is excluded: that would leave
+        // every level resident and still write a second copy into .stream, which is
+        // all of the disk cost for none of the benefit.
+        var streamResident = streamFloor > 0 && mipCount > 1 && sourceFormat.IsSizable()
+                             && StingrayTexturePrefix.CanDescribe(prefixLength, mipCount)
+            ? DxgiFormatInfo.LevelsToDrop(width, height, mipCount, streamFloor)
+            : 0;
+
+        if (streamResident > 0)
         {
-            var resident = DxgiFormatInfo.LevelsToDrop(width, height, mipCount, streamFloor);
+            var resident = streamResident;
             var chain = sourceFormat.MipChain(width, height, mipCount);
             var residentBytes = chain.Skip(resident).Sum();
 

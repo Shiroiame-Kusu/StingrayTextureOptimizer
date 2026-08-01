@@ -65,11 +65,31 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public IReadOnlyList<StreamFloor> StreamFloors { get; } =
     [
         new(0, "Off"),
+        new(2048, "Keep 2048 resident"),
+        new(1024, "Keep 1024 resident"),
         new(512, "Keep 512 resident"),
         new(256, "Keep 256 resident"),
         new(128, "Keep 128 resident"),
         new(64, "Keep 64 resident"),
     ];
+
+    /// <summary>
+    /// Mip levels only means anything while streaming is off. A streamed texture
+    /// keeps its whole chain — that is the point — so there is nothing to drop,
+    /// and leaving the choice live would let it look as though it applied.
+    /// </summary>
+    public bool CanChooseMipMode => !IsBusy && StreamFloor.Value == 0;
+
+    public string MipModeHint =>
+        CanChooseMipMode
+            ? "What to do with a texture that carries a mip chain.\n"
+            + "Keep smaller levels: discard only the levels above the cap. The texture stays "
+            + "mipmapped, so it will not shimmer at distance.\n"
+            + "Keep one level only: throw the chain away and keep a single image. Smaller, but "
+            + "minified surfaces shimmer and sample less efficiently.\n"
+            + "Either way the pixels are the author's own: nothing is re-encoded."
+            : "Not used while Stream mips is on: a streamed texture keeps its whole chain, "
+            + "so there are no levels to drop. Set Stream mips to Off to choose here.";
 
     [ObservableProperty] private string? _bundlePath;
     [ObservableProperty] private string _status = "Open a bundle to begin.";
@@ -288,7 +308,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    partial void OnIsBusyChanged(bool value) => OnPropertyChanged(nameof(CanOptimize));
+    partial void OnIsBusyChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanOptimize));
+        OnPropertyChanged(nameof(CanChooseMipMode));
+    }
 
     public void RecalculateTotals()
     {
@@ -328,6 +352,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     partial void OnStreamFloorChanged(StreamFloor value)
     {
+        OnPropertyChanged(nameof(CanChooseMipMode));
+        OnPropertyChanged(nameof(MipModeHint));
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }
 

@@ -21,6 +21,7 @@ internal static class Screenshot
     public static string? OutputPath { get; private set; }
     public static string? BundlePath { get; private set; }
     public static int SizeCap { get; private set; }
+    public static int StreamFloor { get; private set; }
     public static bool Requested => OutputPath is not null;
 
     /// <summary>Pulls the screenshot arguments out, returning the rest.</summary>
@@ -40,6 +41,9 @@ internal static class Screenshot
                 case "--cap" when i + 1 < args.Length:
                     SizeCap = int.TryParse(args[++i], out var cap) ? cap : 0;
                     break;
+                case "--stream" when i + 1 < args.Length:
+                    StreamFloor = int.TryParse(args[++i], out var floor) ? floor : 0;
+                    break;
                 default:
                     rest.Add(args[i]);
                     break;
@@ -57,6 +61,12 @@ internal static class Screenshot
         {
             var choice = viewModel.SizeCaps.FirstOrDefault(c => c.Value == SizeCap);
             if (choice is not null) viewModel.SizeCap = choice;
+        }
+
+        if (StreamFloor > 0)
+        {
+            var floor = viewModel.StreamFloors.FirstOrDefault(f => f.Value == StreamFloor);
+            if (floor is not null) viewModel.StreamFloor = floor;
         }
 
         if (BundlePath is not null)
