@@ -461,6 +461,37 @@ no-op.
 survives the cap — that is the point — so there is nothing further to drop, and
 the GUI disables that dropdown rather than letting it look as though it applied.
 
+#### What N actually is, and what to set it to
+
+N is **the largest mip level that stays in video memory permanently**. At
+`--stream 256`, levels 256² and below live in `.gpu_resources` for good, and
+everything larger lives only in `.stream`, loaded when the texture is on screen.
+
+So the resident copy is the guaranteed baseline — what can be drawn immediately,
+before anything is streamed in. A lower N means less permanent memory but a
+blurrier first look at something that has just appeared.
+
+That sounds like a real trade-off. It mostly is not:
+
+| Floor | video memory | saved |
+| --- | --- | --- |
+| off | 205.6 MiB | — |
+| 2048 | 165.6 MiB | 40.0 MiB |
+| 1024 | 117.6 MiB | 88.0 MiB |
+| **512** | 103.6 MiB | **102.0 MiB** |
+| 256 | 99.4 MiB | 106.2 MiB |
+| 128 | 98.0 MiB | 107.6 MiB |
+| 64 | 97.7 MiB | 107.9 MiB |
+
+Dropping from 512 all the way to 64 buys **5.9 MiB more**, after 102 MiB has
+already been saved — the same geometric series as everywhere else on this page.
+By 512 there is almost nothing left to give.
+
+**Turning it on is what matters; the value barely does.** Use **512**: within
+6 MiB of the best case, with a usable image always resident so pop-in is least
+visible. Lower values chase the last few per cent at the cost of a blurrier
+first frame.
+
 **Why it is off by default.** The conversion has to write one field in the
 Stingray prefix whose meaning is not established: every streamed texture carries
 1 or 2 there, and the 53 samples available do not explain which. This tool

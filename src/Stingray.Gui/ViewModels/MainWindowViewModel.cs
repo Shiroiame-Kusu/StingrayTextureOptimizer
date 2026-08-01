@@ -67,7 +67,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         new(0, "Off"),
         new(2048, "Keep 2048 resident"),
         new(1024, "Keep 1024 resident"),
-        new(512, "Keep 512 resident"),
+        new(512, "Keep 512 resident (suggested)"),
         new(256, "Keep 256 resident"),
         new(128, "Keep 128 resident"),
         new(64, "Keep 64 resident"),

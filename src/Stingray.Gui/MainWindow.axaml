@@ -69,7 +69,7 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="EXPERIMENTAL, off by default.&#x0a;Moves a mipmapped texture's whole chain into the .stream file and keeps only levels of the chosen size or smaller in video memory.&#x0a;Nothing is discarded and nothing is re-encoded: the engine loads full resolution again whenever the texture is actually on screen.&#x0a;This is the only option here that cuts video memory without costing quality — it costs disk space instead.&#x0a;One field the conversion has to write is not fully understood, so test in game and keep the backup.">
+                    ToolTip.Tip="EXPERIMENTAL, off by default.&#x0a;The value is the largest mip level that stays in video memory permanently. Everything above it moves to the .stream file and is loaded when the texture is actually on screen, so nothing is discarded and nothing is re-encoded.&#x0a;This is the only option here that cuts video memory without costing quality — it costs disk space instead.&#x0a;Which value hardly matters: on a real mod, Off to 512 saves 102 MiB, and going all the way down to 64 saves only 6 MiB more. A higher floor keeps a usable image resident, so pop-in is less visible. 512 is the suggested choice.&#x0a;One field the conversion has to write is not fully understood, so test in game and keep the backup.">
           <TextBlock Text="Stream mips" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding StreamFloors}" SelectedItem="{Binding StreamFloor}"
                     MinWidth="170" IsEnabled="{Binding !IsBusy}" />
