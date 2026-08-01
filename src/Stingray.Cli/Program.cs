@@ -159,8 +159,10 @@ internal static class Program
             }
         }
 
+        // The dimensions matter as much as the reason: "unsupported format" on a
+        // 1x1 texture is not a gap worth caring about.
         foreach (var skip in plan.Skipped)
-            Console.WriteLine($"{skip.Name,-16} skipped: {skip.Reason}");
+            Console.WriteLine($"{skip.Name,-16} {skip.Description,-30} skipped: {skip.Reason}");
 
         if (plan.DuplicateEntryCount > 0)
             Console.WriteLine($"\nduplicates: {plan.DuplicateEntryCount} entr(ies) repeat a payload another "
