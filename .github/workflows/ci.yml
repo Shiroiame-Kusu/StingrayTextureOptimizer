@@ -23,6 +23,28 @@ jobs:
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '10.0.x'
+      # Built before the managed build, because Directory.Build.targets copies
+      # whatever is in build/native into every project's output — which is how a
+      # developer machine ends up testing the native encoder and, until now, how
+      # CI silently did not. The row it unlocks covers the sub-4x4 mip levels
+      # CMP_Core rejects, which is a case that has already gone wrong once.
+      - name: Check out Compressonator (CMP_Core)
+        uses: actions/checkout@v4
+        with:
+          repository: GPUOpen-Tools/compressonator
+          ref: master
+          path: external/compressonator
+          sparse-checkout: |
+            cmp_core
+            applications/_libs/cmp_math
+          sparse-checkout-cone-mode: false
+
+      - name: Build native encoder shim
+        run: |
+          cmake -S native -B build/native -DCMAKE_BUILD_TYPE=Release \
+            -DCOMPRESSONATOR_SOURCE="$GITHUB_WORKSPACE/external/compressonator"
+          cmake --build build/native --config Release
+
       - run: dotnet restore
       - run: dotnet build --no-restore -c Release
       - run: dotnet test --no-build -c Release --verbosity normal
