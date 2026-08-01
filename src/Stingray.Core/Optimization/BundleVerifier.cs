@@ -40,6 +40,10 @@ public static class BundleVerifier
             ? GpuResourceFile.Open(bundle.GpuResourcePath)
             : null;
 
+        using var stream = bundle.HasStreamFile && new FileInfo(bundle.StreamPath).Length > 0
+            ? GpuResourceFile.Open(bundle.StreamPath)
+            : null;
+
         if (gpu is null)
         {
             issues.Add(new VerificationIssue("missing-file",
@@ -107,10 +111,25 @@ public static class BundleVerifier
             // verification on bundles that were never touched.
             if (!texture.SourceFormat.IsSizable()) continue;
 
-            // Streamed textures keep their mip chain in the .stream file and leave
-            // only a resident tail in gpu_resources, so the GPU size legitimately
-            // does not describe the full surface. Same for any mipmapped texture.
-            if (entry.StreamSize > 0 || texture.Header.MipMapCount > 1) continue;
+            // A streamed texture describes itself in the Stingray prefix rather
+            // than through gpuSize alone, so it gets its own check.
+            if (entry.StreamSize > 0)
+            {
+                VerifyStreamed(bundle, entry, texture, stream, issues);
+                continue;
+            }
+
+            // A resident mip chain costs the sum of every level, not just level 0.
+            if (texture.Header.MipMapCount > 1)
+            {
+                var chain = texture.SourceFormat
+                    .MipChain(texture.Width, texture.Height, texture.Header.MipMapCount).Sum();
+                if (chain != entry.GpuSize)
+                    issues.Add(new VerificationIssue("texture-size",
+                        $"{entry.Name}: header describes a {texture.Header.MipMapCount}-level chain "
+                      + $"of {chain} bytes but the table says {entry.GpuSize}"));
+                continue;
+            }
 
             var mips = Math.Max(1, texture.Header.MipMapCount);
             var expected = mips > 1
@@ -150,6 +169,109 @@ public static class BundleVerifier
             PayloadsCompared = compared,
             PaddingBytes = gpu.Length - covered,
         };
+    }
+
+    /// <summary>
+    /// Checks that a streamed texture's Stingray prefix agrees with its DDS header
+    /// and with the two payloads it points at.
+    /// </summary>
+    /// <remarks>
+    /// The level table is what the engine uses to find each mip inside
+    /// <c>.stream</c>. If it describes different dimensions from the DDS header the
+    /// bundle still looks structurally sound — sizes line up, nothing overlaps —
+    /// but every level is read from the wrong offset and the texture renders as
+    /// garbage. That is worth catching here rather than in game, so the expected
+    /// values are recomputed from the DDS header rather than taken from the writer.
+    /// </remarks>
+    private static void VerifyStreamed(
+        Bundle bundle, BundleFileEntry entry, TextureResource texture,
+        GpuResourceFile? stream, List<VerificationIssue> issues)
+    {
+        var payload = bundle.GetCpuPayload(entry);
+        var prefix = texture.Header.Offset;
+        var mips = Math.Max(1, texture.Header.MipMapCount);
+
+        var first = texture.FirstResidentMip;
+        if (first == TextureResource.NotStreamed || first >= (uint)mips)
+        {
+            issues.Add(new VerificationIssue("stream-resident",
+                $"{entry.Name}: streamed but the first resident level is {(int)first}, "
+              + $"which is not within a {mips}-level chain"));
+            return;
+        }
+
+        var chain = texture.SourceFormat.MipChain(texture.Width, texture.Height, mips);
+        var total = chain.Sum();
+
+        if (entry.StreamSize != total)
+            issues.Add(new VerificationIssue("stream-size",
+                $"{entry.Name}: .stream holds {entry.StreamSize} bytes but the header "
+              + $"describes a {mips}-level chain of {total}"));
+
+        var resident = chain.Skip((int)first).Sum();
+        if (entry.GpuSize != resident)
+            issues.Add(new VerificationIssue("stream-resident-size",
+                $"{entry.Name}: {entry.GpuSize} bytes resident but levels {first}.. "
+              + $"come to {resident}"));
+
+        if (entry.StreamOffset % BundleFormat.GpuAlignment != 0)
+            issues.Add(new VerificationIssue("stream-alignment",
+                $"{entry.Name}: stream offset {entry.StreamOffset} is not a multiple "
+              + $"of {BundleFormat.GpuAlignment}"));
+
+        if (stream is null)
+            issues.Add(new VerificationIssue("missing-file",
+                $"{entry.Name} is streamed but {Path.GetFileName(bundle.StreamPath)} does not exist"));
+        else if ((long)entry.StreamOffset + entry.StreamSize > stream.Length)
+            issues.Add(new VerificationIssue("stream-bounds",
+                $"{entry.Name}: stream region runs to {entry.StreamOffset + entry.StreamSize}, "
+              + $"past the {stream.Length}-byte file"));
+
+        if (prefix < StingrayTexturePrefix.LevelTableOffset + mips * StingrayTexturePrefix.LevelEntrySize)
+        {
+            issues.Add(new VerificationIssue("stream-table",
+                $"{entry.Name}: a {mips}-level table does not fit in a {prefix}-byte prefix"));
+            return;
+        }
+
+        var declared = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(
+            payload[StingrayTexturePrefix.ChainSizeOffset..]);
+        if (declared != total)
+            issues.Add(new VerificationIssue("stream-table",
+                $"{entry.Name}: the prefix declares a {declared}-byte chain but the header "
+              + $"describes {total}"));
+
+        long running = 0;
+        for (var level = 0; level < mips; level++)
+        {
+            var at = StingrayTexturePrefix.LevelTableOffset + level * StingrayTexturePrefix.LevelEntrySize;
+            var w = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(payload[at..]);
+            var h = System.Buffers.Binary.BinaryPrimitives.ReadUInt16LittleEndian(payload[(at + 2)..]);
+            var next = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(payload[(at + 4)..]);
+            var rest = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(payload[(at + 8)..]);
+
+            var expectedW = Math.Max(1, texture.Width >> level);
+            var expectedH = Math.Max(1, texture.Height >> level);
+            if (w != expectedW || h != expectedH)
+            {
+                issues.Add(new VerificationIssue("stream-table",
+                    $"{entry.Name}: level {level} of the prefix table says {w}x{h}, but the "
+                  + $"DDS header implies {expectedW}x{expectedH} — the engine would read every "
+                  + "level from the wrong offset"));
+                return;
+            }
+
+            running += chain[level];
+            var expectedNext = level == mips - 1 ? 0 : running;
+            var expectedRest = level == mips - 1 ? 0 : total - running;
+            if (next != expectedNext || rest != expectedRest)
+            {
+                issues.Add(new VerificationIssue("stream-table",
+                    $"{entry.Name}: level {level} offsets are ({next}, {rest}), expected "
+                  + $"({expectedNext}, {expectedRest})"));
+                return;
+            }
+        }
     }
 
     /// <summary>

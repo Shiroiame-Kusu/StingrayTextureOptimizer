@@ -178,7 +178,7 @@ public class MipDropTests
         // Their top levels live in .stream, so slicing gpu_resources alone would
         // desynchronise the two files.
         using var fixture = new SyntheticBundle()
-            .AddStreamedTexture(512, 512, mipCount: 10, residentTailSize: 1392, streamSize: 349552)
+            .AddStreamedChain(512, 512, DxgiFormat.Bc7Unorm, mipCount: 10, firstResidentMip: 4)
             .Write();
 
         var bundle = Bundle.Load(fixture.BundlePath);

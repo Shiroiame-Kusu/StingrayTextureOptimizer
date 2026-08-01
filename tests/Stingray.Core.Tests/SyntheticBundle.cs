@@ -54,23 +54,6 @@ internal sealed class SyntheticBundle : IDisposable
     }
 
     /// <summary>
-    /// Adds a streamed BC7 texture: the mip chain lives in the .stream file and
-    /// gpu_resources holds only a small resident tail, so its GPU size is much
-    /// smaller than the full surface.
-    /// </summary>
-    public SyntheticBundle AddStreamedTexture(int width, int height, int mipCount,
-                                              int residentTailSize, int streamSize)
-    {
-        var cpu = BuildTextureCpuPayload(width, height, mipCount: mipCount,
-                                         dxgiFormat: 98, linearSize: 0);
-        var tail = new byte[residentTailSize];
-        var stream = new byte[streamSize];
-        for (var i = 0; i < stream.Length; i++) stream[i] = (byte)(i * 7);
-        _entries.Add((StingrayTypeIds.Texture, cpu, tail, stream));
-        return this;
-    }
-
-    /// <summary>
     /// Adds a streamed texture shaped the way real ones are: the whole chain in
     /// <c>.stream</c>, a duplicate of the tail resident in <c>.gpu_resources</c>,
     /// and a prefix carrying the level table.

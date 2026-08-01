@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
 // SPDX-License-Identifier: GPL-3.0-or-later
 
+using Stingray.Core.Dds;
 using Stingray.Core.Format;
 using Stingray.Core.Optimization;
 using Stingray.Core.Textures;
@@ -221,7 +222,7 @@ public class DeduplicationTests
         // gpu_resources, so its GPU size legitimately differs from the surface size.
         // This mirrors a real bundle: 512x512 BC7, 10 mips, 1392 resident bytes.
         using var fixture = new SyntheticBundle()
-            .AddStreamedTexture(512, 512, mipCount: 10, residentTailSize: 1392, streamSize: 349552)
+            .AddStreamedChain(512, 512, DxgiFormat.Bc7Unorm, mipCount: 10, firstResidentMip: 4)
             .Write();
 
         var report = BundleVerifier.Verify(fixture.BundlePath);

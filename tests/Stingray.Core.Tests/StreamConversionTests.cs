@@ -359,4 +359,98 @@ public class StreamConversionTests
         Assert.Equal(1, OptimizationPlan.Build(bundle, gpu,
             maxDimension: 64, streamFloor: 32).StreamConversionCount);
     }
+
+    /// <summary>
+    /// The exact combination that corrupted textures in game: cap and floor set in
+    /// one pass, so the header is rewritten and the prefix must follow it. The
+    /// level table describing different dimensions from the DDS header leaves a
+    /// bundle that looks structurally sound but reads every level from the wrong
+    /// offset.
+    /// </summary>
+    [Theory]
+    [InlineData(4096, 13, 2048, 1024)]
+    [InlineData(4096, 13, 1024, 256)]
+    [InlineData(2048, 12, 1024, 512)]
+    public void CappingAndStreamingInOnePassKeepsThePrefixAndHeaderInStep(
+        int size, int mips, int cap, int floor)
+    {
+        using var fixture = new SyntheticBundle()
+            .AddMippedTexture(size, size, DxgiFormat.Bc7Unorm, mips)
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using (var gpu = GpuResourceFile.Open(bundle.GpuResourcePath))
+        {
+            var plan = OptimizationPlan.Build(bundle, gpu, maxDimension: cap, streamFloor: floor);
+            Assert.Equal(1, plan.StreamConversionCount);
+            BundleOptimizer.Apply(plan, gpu, bundle.Path, bundle.GpuResourcePath, Fast,
+                                  outputStreamPath: bundle.StreamPath);
+        }
+
+        var rebuilt = Bundle.Load(fixture.BundlePath);
+        var entry = rebuilt.Textures.Single();
+        var payload = rebuilt.GetCpuPayload(entry);
+        Assert.True(DdsHeader.TryRead(payload, out var dds));
+
+        // The header must have been capped...
+        Assert.Equal(cap, dds!.Width);
+
+        // ...and the prefix table must describe that same texture, not one a
+        // halving out of step with it.
+        Assert.Equal(cap, BinaryPrimitives.ReadUInt16LittleEndian(
+            payload[StingrayTexturePrefix.LevelTableOffset..]));
+
+        var chain = DxgiFormat.Bc7Unorm.MipChain(dds.Width, dds.Height, dds.MipMapCount);
+        Assert.Equal((uint)chain.Sum(), BinaryPrimitives.ReadUInt32LittleEndian(
+            payload[StingrayTexturePrefix.ChainSizeOffset..]));
+        Assert.Equal(chain.Sum(), entry.StreamSize);
+
+        // And the verifier agrees, which is the check that would have caught it.
+        var report = BundleVerifier.Verify(rebuilt.Path);
+        Assert.True(report.Passed, string.Join("; ", report.Issues.Select(i => i.Detail)));
+    }
+
+    /// <summary>
+    /// A prefix table that disagrees with the DDS header must fail verification.
+    /// Corrupted deliberately, because the writer no longer produces this.
+    /// </summary>
+    [Fact]
+    public void VerificationRejectsAPrefixTableThatContradictsTheHeader()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddStreamedChain(256, 256, DxgiFormat.Bc7Unorm, 9, firstResidentMip: 3)
+            .Write();
+
+        Assert.True(BundleVerifier.Verify(fixture.BundlePath).Passed);
+
+        // Halve the dimensions the level table claims, exactly as the aliasing bug
+        // did, and leave everything else alone.
+        var image = File.ReadAllBytes(fixture.BundlePath);
+        var entry = Bundle.Load(fixture.BundlePath).Textures.Single();
+        var at = (int)entry.Offset + StingrayTexturePrefix.LevelTableOffset;
+        BinaryPrimitives.WriteUInt16LittleEndian(image.AsSpan(at), 128);
+        File.WriteAllBytes(fixture.BundlePath, image);
+
+        var report = BundleVerifier.Verify(fixture.BundlePath);
+        Assert.False(report.Passed);
+        Assert.Contains(report.Issues, i => i.Category == "stream-table");
+    }
+
+    /// <summary>A streamed entry pointing past the end of .stream must be caught.</summary>
+    [Fact]
+    public void VerificationRejectsAStreamRegionPastTheEndOfTheFile()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddStreamedChain(256, 256, DxgiFormat.Bc7Unorm, 9, firstResidentMip: 3)
+            .Write();
+
+        var image = File.ReadAllBytes(fixture.BundlePath);
+        var entry = Bundle.Load(fixture.BundlePath).Textures.Single();
+        entry.WriteStreamFields(image, entry.StreamOffset + 1024 * 1024, entry.StreamSize);
+        File.WriteAllBytes(fixture.BundlePath, image);
+
+        var report = BundleVerifier.Verify(fixture.BundlePath);
+        Assert.False(report.Passed);
+        Assert.Contains(report.Issues, i => i.Category is "stream-bounds" or "stream-alignment");
+    }
 }
