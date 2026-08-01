@@ -641,6 +641,34 @@ in latency: the sharp levels arrive shortly after the texture comes into view,
 so a close-up can be briefly soft. `--max-size` never has that pop-in because
 there is nothing left to load.
 
+### What the engine actually does with a streamed texture
+
+Helldivers 2 ships its streaming settings in `data/settings.ini`, so this is not
+guesswork:
+
+- Levels are picked by **texel density** — how large the texture is on screen,
+  not how far away it is.
+- It starts low and climbs (`initialize_at_max = false`), limited to 16 MiB and
+  32 texture updates per frame. That rate limit is the pop-in.
+- Streamed memory is **budgeted and evicted**: a 1536 MB pool, textures unseen
+  for a while become candidates, levels are dropped and then unloaded, and the
+  engine shrinks harder as it nears the budget.
+
+Which means the two files are not merely different places to put bytes:
+
+| | Allocation |
+| --- | --- |
+| `.gpu_resources` | **always allocated**, unbounded, against a 5376 MB texture heap |
+| `.stream` | **capped at 1536 MB**, the engine evicts to stay under it |
+
+So streaming moves memory out of a permanent unbounded allocation into a pool
+whose peak the engine enforces. That is the real reason it helps: not just a
+smaller number, but a bounded one.
+
+It also fixes what the tool's `gpu` figure means. **It is the always-allocated
+part** — what is permanently spent before anything is streamed. Streamed content
+adds at most the pool budget on top, and the engine manages that itself.
+
 That is the whole reason `--stream` exists. Every other option here buys video
 memory with quality; this one buys it with disk space.
 

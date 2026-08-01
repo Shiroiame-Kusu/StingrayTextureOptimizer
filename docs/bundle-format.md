@@ -194,6 +194,51 @@ the higher levels are still loading.
 `.stream` is packed exactly like `.gpu_resources`: 64-byte aligned, in file-table
 order, ending precisely at the last payload with no slack.
 
+### What the engine does with it
+
+Helldivers 2 ships its streaming configuration in `data/settings.ini`, which
+answers what the file layout alone cannot:
+
+```
+texture_streaming = {
+    inv_texel_density              = 4
+    initialize_at_max              = false
+    max_frame_upload_bytes         = 16777216      -- 16 MiB
+    max_frame_updates              = 32
+    max_frame_copy_bytes           = 67108864      -- 64 MiB
+    memory_budget_mb               = 1536
+    memory_threshold_fast_shrink   = 33554432      -- 32 MiB
+    minimum_unseen_delay           = 60
+    minimum_shrink_delay           = 30
+    minimum_unload_delay           = 2
+    streaming_update_quick_drops   = false
+}
+```
+
+Levels are chosen by **texel density** — texels per screen pixel — so what
+matters is a texture's apparent size, not distance. `initialize_at_max = false`
+means the engine starts low and climbs, rate-limited to 16 MiB and 32 texture
+updates per frame, which is where the brief softness after something appears
+comes from.
+
+Streamed levels are **evicted**: the pool has a 1536 MB budget, textures unseen
+for `minimum_unseen_delay` become candidates, levels are dropped after
+`minimum_shrink_delay` and unloaded after `minimum_unload_delay`, and the engine
+shrinks harder once within 32 MiB of the budget. The delays carry no units in
+the file.
+
+The consequence for anything rewriting bundles is that the two companion files
+are governed differently:
+
+| File | Allocation |
+| --- | --- |
+| `.gpu_resources` | always allocated, unbounded, against `d3d12.texture_heap_usage_limit` (5376 in the shipped config) |
+| `.stream` | bounded by `memory_budget_mb`, with the engine evicting to stay under it |
+
+So moving a chain into `.stream` does not merely lower the resident figure — it
+moves that memory from an unbounded permanent allocation into a budgeted pool
+whose peak the engine enforces.
+
 ### The field at prefix offset 4
 
 A streaming flag: zero for every non-streamed texture (498 of 498), non-zero for
