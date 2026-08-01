@@ -523,11 +523,15 @@ carry both values, so whatever selects it is not in the texture.
 
 This tool writes 2 when the id at the start of the prefix is zero and 1
 otherwise, which matches the shipped data 75% of the time against a ceiling of
-77% for any rule based on that id. It is still a guess. Both values are attested
-for every texture shape, so neither is obviously wrong for any given texture, but
-if a converted texture fails to load in game that field is the first thing to
-change — see `docs/bundle-format.md`. Test before relying on it, and keep the
-backup.
+77% for any rule based on that id. It is still a guess.
+
+**Getting it wrong looks harmless.** The flag was inverted on all 53 streamed
+textures across two mods, both directions covered, and the difference in game
+was reported as almost none — nothing failed to load, nothing rendered wrong.
+That is one test rather than a guarantee, and a subtle streaming-priority effect
+would be hard to see, but it is not the kind of field that breaks a texture. The
+option stays off by default because it is still doing something the engine was
+not asked about; keep the backup and test your own mods.
 
 ### Collapse solid colours — `--no-collapse` disables (GUI: *Collapse solid colours*)
 

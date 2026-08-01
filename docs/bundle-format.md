@@ -330,6 +330,18 @@ first field to change if a converted texture fails to load.
 One thing does make the risk bounded: both values are attested for every texture
 shape, so neither is obviously invalid for any particular texture.
 
+**Swapping the two changes almost nothing in game.** Tested directly: the flag
+was inverted on all 53 streamed textures across two mods — 46 going 2 → 1 and 7
+going 1 → 2, so both directions were covered — and the result in game was
+reported as almost no difference. Nothing failed to load and nothing rendered
+wrong.
+
+That is one test on two mods rather than a proof the field is inert, and "almost
+no difference" is not "no difference": a streaming-priority effect would show up
+as slightly different pop-in, which is exactly the kind of thing that phrase
+covers. But it does mean picking the value wrong is not the kind of mistake that
+breaks a texture, which is what the caution around this field was mostly about.
+
 This matters for memory rather than disk. A 4096×4096 BC7 texture with a full
 13-level chain is 21.3 MiB; if the field says `0xFFFFFFFF`, all of it is resident
 at once. Mod tooling appears to write `0xFFFFFFFF` routinely, which defeats the
