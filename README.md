@@ -393,7 +393,10 @@ and crawl whenever they are seen at an angle or from a distance, because the GPU
 has no smaller level to sample from. This builds the chain they should have had.
 
 It is also what makes `--stream` possible for them: streaming can only move
-levels that exist, so a single-level texture has nothing to stream.
+levels that exist, so a single-level texture has nothing to stream. That is why
+the GUI ticks this for you when you pick a *Stream mips* level, and unticks it
+again if you set that back to *Off* — on its own it is a cost, not a saving.
+Untick it yourself at any point and that choice stands.
 
 On its own it **costs** about a third more video memory, since the chain below
 level 0 adds up to that. The two together are the point:
@@ -442,6 +445,20 @@ On the Asteria mod, at `--stream 256`:
 byte written is a copy of a byte that was already there, which the tests check
 against the original. The textures that do not convert are the single-mip ones,
 which have no chain to move.
+
+**On a mod with no mip chains at all, this option alone does nothing** — and
+plenty of mods are exactly that. Build the chains first and they become
+streamable; the GUI ticks *Generate mipmaps* for you when you pick a level, and
+the CLI says so:
+
+```
+$ stingray-tex analyze mymod.patch_0 --stream 512
+note: 7 texture(s) here carry no mip chain, so --stream cannot move them.
+Pass --add-mips to build chains first, and they become streamable too.
+
+$ stingray-tex analyze mymod.patch_0 --stream 512 --add-mips
+gpu    143.1 MiB ->  124.7 MiB   (saves 18.3 MiB)
+```
 
 **It composes with `--max-size`,** which is usually what you want. The cap
 discards levels above it for good — the only part that costs quality — and what

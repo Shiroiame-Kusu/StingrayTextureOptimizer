@@ -59,7 +59,7 @@ internal static class Program
                                           streamFloor: options.StreamFloor,
                                           generateMips: options.AddMips);
         plan.Deduplicate = !options.NoDedup;
-        PrintPlan(plan);
+        PrintPlan(plan, options);
         return 0;
     }
 
@@ -73,7 +73,7 @@ internal static class Program
                                           streamFloor: options.StreamFloor,
                                           generateMips: options.AddMips);
         plan.Deduplicate = !options.NoDedup;
-        PrintPlan(plan);
+        PrintPlan(plan, options);
 
         // Deduplication alone can be a large saving even when every texture is
         // already compressed, so an empty texture list is not "nothing to do".
@@ -149,7 +149,7 @@ internal static class Program
         return report.Passed ? 0 : 2;
     }
 
-    private static void PrintPlan(OptimizationPlan plan)
+    private static void PrintPlan(OptimizationPlan plan, CommandLine options)
     {
         if (plan.Textures.Count > 0)
         {
@@ -182,6 +182,15 @@ internal static class Program
             Console.WriteLine($"\nstreaming: {plan.StreamConversionCount} texture(s) move their whole mip "
                             + $"chain into .stream, adding {Human(plan.AddedStreamBytes)} on disk. "
                             + "Nothing is discarded — full resolution still loads on demand.");
+
+        // A floor cannot reach a texture with no mip chain: there is no tail to
+        // leave resident and nothing to move out. Mods ship full of those, so
+        // saying so is the difference between a setting that looks applied and
+        // one that is.
+        if (options.StreamFloor > 0 && !options.AddMips && plan.ChainlessCount > 0)
+            Console.WriteLine($"\nnote: {plan.ChainlessCount} texture(s) here carry no mip chain, so "
+                            + "--stream cannot move them. Pass --add-mips to build chains first, and "
+                            + "they become streamable too.");
 
         Console.WriteLine($"\ndisk  {Human(plan.CurrentGpuSize),10} -> {Human(plan.PredictedGpuSize),10}"
                         + $"   (saves {Human(plan.PredictedSaving)})");
@@ -281,6 +290,8 @@ internal static class Program
                               re-encoded, so full resolution still loads when the
                               texture is on screen — video memory drops sharply and
                               the disk cost goes up. Try --stream 256 first.
+                              Only reaches textures that have a chain; pair it with
+                              --add-mips for the ones that shipped without.
                               One field this writes is not fully understood; test in
                               game before relying on it, and keep the backup.
           --max-size <n>      cap texture dimensions at n (power of two); larger ones are

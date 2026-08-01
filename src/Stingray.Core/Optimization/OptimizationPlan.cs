@@ -171,13 +171,14 @@ public sealed class OptimizationPlan
 
     private OptimizationPlan(Bundle bundle, IReadOnlyList<TexturePlanItem> textures,
                              IReadOnlyList<SkippedTexture> skipped, long currentGpuSize,
-                             Dictionary<ulong, string> contentHashes)
+                             Dictionary<ulong, string> contentHashes, int chainlessCount)
     {
         Bundle = bundle;
         Textures = textures;
         Skipped = skipped;
         CurrentGpuSize = currentGpuSize;
         _contentHashes = contentHashes;
+        ChainlessCount = chainlessCount;
     }
 
     /// <summary>Whether repacking writes each distinct payload only once.</summary>
@@ -279,6 +280,14 @@ public sealed class OptimizationPlan
     /// <summary>Textures being given a mip chain they did not have.</summary>
     public int GeneratedChainCount => Textures.Count(t => t.Include && t.GeneratesMips);
 
+    /// <summary>
+    /// Textures examined that shipped with no mip chain, counted whether or not
+    /// one was built for them. Streaming cannot reach any of these — there is no
+    /// tail to leave resident — so a stream floor set without mip generation on a
+    /// bundle where this is large is a setting that does nothing.
+    /// </summary>
+    public int ChainlessCount { get; }
+
     /// <summary>Textures being moved into <c>.stream</c>.</summary>
     public int StreamConversionCount => Textures.Count(t => t.Include && t.IsStreamConversion);
 
@@ -312,6 +321,7 @@ public sealed class OptimizationPlan
     {
         var items = new List<TexturePlanItem>();
         var skipped = new List<SkippedTexture>();
+        var chainless = 0;
 
         // Hash every GPU payload first. Both the size prediction and the repack use
         // this to decide what is shared, and it lets analysis run once per *distinct*
@@ -345,6 +355,10 @@ public sealed class OptimizationPlan
                 skipped.Add(SkippedTexture.From(texture, texture.Unsupported!));
                 continue;
             }
+
+            // Counted before anything is decided, so it describes the bundle
+            // rather than the settings it was analysed under.
+            if (texture.MipMapCount <= 1) chainless++;
 
             var key = hashes.TryGetValue(entry.FileId, out var hash) ? hash : entry.Name;
             if (!analysisCache.TryGetValue(key, out var analysis))
@@ -381,7 +395,7 @@ public sealed class OptimizationPlan
             items.Add(item);
         }
 
-        return new OptimizationPlan(bundle, items, skipped, gpu.Length, hashes);
+        return new OptimizationPlan(bundle, items, skipped, gpu.Length, hashes, chainless);
     }
 }
 

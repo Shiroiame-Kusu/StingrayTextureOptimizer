@@ -356,20 +356,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     /// <summary>Re-runs analysis when the strategy changes, so the grid stays in sync.</summary>
-    partial void OnStrategyChanged(StrategyChoice value)
-    {
-        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
-    }
+    partial void OnStrategyChanged(StrategyChoice value) => Replan();
 
     partial void OnAddMipsChanged(bool value)
     {
-        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
+        // An explicit tick or untick wins over the streaming coupling from here
+        // on: whatever the box says now is what the user meant it to say.
+        if (!_linking) _addMipsFollowsStream = false;
+        Replan();
     }
 
-    partial void OnCollapseSolidColoursChanged(bool value)
-    {
-        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
-    }
+    partial void OnCollapseSolidColoursChanged(bool value) => Replan();
 
     partial void OnDeduplicateChanged(bool value)
     {
@@ -377,7 +374,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         RecalculateTotals();
     }
 
-    partial void OnStreamFloorChanged(StreamFloor value)
+    partial void OnStreamFloorChanged(StreamFloor value) => Link(() =>
     {
         OnPropertyChanged(nameof(CanChooseMipMode));
         OnPropertyChanged(nameof(MipModeHint));
@@ -385,32 +382,74 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // Streaming always keeps the chain, so show that rather than leaving a
         // stale "keep one level only" greyed out as though it still applied.
         if (value.Value != 0 && MipSelection.Value != MipMode.KeepChain)
-        {
             MipSelection = MipModes[0];
-            return;   // that assignment replans
+
+        // A texture with no mip chain cannot be streamed: there is no tail to
+        // leave resident and no levels to move out. Mods ship that way
+        // constantly, so a floor on its own is a setting that does nothing on
+        // exactly the bundles that need it most. Turn generation on with it —
+        // and off again with it, because generation alone adds video memory
+        // rather than removing it, and leaving it set would quietly invert what
+        // the tool is for. Generation only ever touches a texture that has no
+        // chain, so this cannot disturb one that already has its own.
+        if (value.Value != 0 && !AddMips)
+        {
+            _addMipsFollowsStream = true;
+            AddMips = true;
         }
+        else if (value.Value == 0 && _addMipsFollowsStream)
+        {
+            _addMipsFollowsStream = false;
+            AddMips = false;
+        }
+    });
 
-        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
-    }
-
-    partial void OnSizeCapChanged(SizeCap value)
+    partial void OnSizeCapChanged(SizeCap value) => Link(() =>
     {
         OnPropertyChanged(nameof(StreamFloors));
 
         // Lowering the cap can strand the current floor above it, where it would
         // silently do nothing. Pull it down to the largest one that still works.
         if (StreamFloor.Value != 0 && value.Value != 0 && StreamFloor.Value >= value.Value)
-        {
             StreamFloor = StreamFloors.FirstOrDefault(f => f.Value != 0)
                           ?? AllStreamFloors[0];
-            return;   // that assignment replans
-        }
+    });
 
-        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
+    partial void OnMipSelectionChanged(MipModeChoice value) => Replan();
+
+    /// <summary>
+    /// True while one setting is pulling others along with it, so a change can
+    /// tell whether it came from the person at the window or from a sibling
+    /// setting, and so the group replans once rather than once per member.
+    /// </summary>
+    private bool _linking;
+
+    /// <summary>
+    /// Set when picking a stream floor was what turned <see cref="AddMips"/> on,
+    /// which is the only case where dropping the floor turns it off again.
+    /// </summary>
+    private bool _addMipsFollowsStream;
+
+    /// <summary>
+    /// Applies a group of coupled setting changes as one edit. Each of these
+    /// settings would otherwise start its own analysis pass, so several would run
+    /// over each other on a single click; the replan is held until the group has
+    /// settled and then run once against the state it left behind.
+    /// </summary>
+    private void Link(Action changes)
+    {
+        if (_linking) { changes(); return; }
+
+        _linking = true;
+        try { changes(); }
+        finally { _linking = false; }
+        Replan();
     }
 
-    partial void OnMipSelectionChanged(MipModeChoice value)
+    /// <summary>Re-analyses the open bundle under the current settings.</summary>
+    private void Replan()
     {
+        if (_linking) return;
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }
 }

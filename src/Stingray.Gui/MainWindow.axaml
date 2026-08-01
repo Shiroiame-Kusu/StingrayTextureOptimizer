@@ -69,7 +69,7 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="EXPERIMENTAL, off by default.&#x0a;The value is the largest mip level that stays in video memory permanently. Everything above it moves to the .stream file and is loaded when the texture is actually on screen, so nothing is discarded and nothing is re-encoded.&#x0a;This is the only option here that cuts video memory without costing quality — it costs disk space instead.&#x0a;Which value hardly matters: on a real mod, Off to 512 saves 102 MiB, and going all the way down to 64 saves only 6 MiB more. A higher floor keeps a usable image resident, so pop-in is less visible. 512 is the suggested choice.&#x0a;One field the conversion has to write is not fully understood, so test in game and keep the backup.">
+                    ToolTip.Tip="EXPERIMENTAL, off by default.&#x0a;The value is the largest mip level that stays in video memory permanently. Everything above it moves to the .stream file and is loaded when the texture is actually on screen, so nothing is discarded and nothing is re-encoded.&#x0a;This is the only option here that cuts video memory without costing quality — it costs disk space instead.&#x0a;Which value hardly matters: on a real mod, Off to 512 saves 102 MiB, and going all the way down to 64 saves only 6 MiB more. A higher floor keeps a usable image resident, so pop-in is less visible. 512 is the suggested choice.&#x0a;Turns Generate mipmaps on with it, because a texture with no chain has nothing to stream; setting this back to Off turns it off again.&#x0a;One field the conversion has to write is not fully understood, so test in game and keep the backup.">
           <TextBlock Text="Stream mips" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding StreamFloors}" SelectedItem="{Binding StreamFloor}"
                     MinWidth="170" IsEnabled="{Binding !IsBusy}" />
@@ -84,7 +84,7 @@
 
         <CheckBox Content="Generate mipmaps"
                   IsChecked="{Binding AddMips}" IsEnabled="{Binding !IsBusy}"
-                  ToolTip.Tip="Builds a mip chain for textures that shipped without one, which many mods do.&#x0a;Those textures shimmer and crawl when seen at an angle or from a distance, because the GPU has no smaller level to sample. This fixes that.&#x0a;On its own it costs about a third more video memory, since the chain below the top level adds up to that.&#x0a;It pays for itself with Stream mips: once a chain exists the texture can be streamed, and only the small levels need to stay resident.&#x0a;This one re-encodes, so it is not lossless." />
+                  ToolTip.Tip="Builds a mip chain for textures that shipped without one, which many mods do.&#x0a;Those textures shimmer and crawl when seen at an angle or from a distance, because the GPU has no smaller level to sample. This fixes that.&#x0a;On its own it costs about a third more video memory, since the chain below the top level adds up to that.&#x0a;It pays for itself with Stream mips: once a chain exists the texture can be streamed, and only the small levels need to stay resident. Picking a Stream mips level ticks this for you for that reason.&#x0a;This one re-encodes, so it is not lossless." />
 
         <CheckBox Content="Collapse solid colours"
                   IsChecked="{Binding CollapseSolidColours}" IsEnabled="{Binding !IsBusy}"
