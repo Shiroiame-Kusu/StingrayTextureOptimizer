@@ -519,11 +519,83 @@ unchanged. Only actually shrinking a surface helps there:
 | Sharing duplicates | yes | **no** |
 
 So if you are chasing download size, deduplication is the big win. If you are
-chasing VRAM, it does nothing and you want `--max-size`.
+chasing VRAM, it does nothing and you want `--max-size` or `--stream`.
 
 Two caveats on the GPU figure: it assumes every texture is resident at once,
 which is the worst case, and it excludes anything the engine pulls in from the
 `.stream` file on demand.
+
+## Mip levels and video memory
+
+Mipmaps exist for filtering, not loading. The GPU picks a level per *pixel* as
+it samples, which is what trilinear and anisotropic filtering are — so the whole
+chain has to be in memory at once, because the hardware needs any level at any
+moment. That is why a mip chain costs VRAM rather than saving it.
+
+**Each level is a quarter of the one above.** The chain is therefore a geometric
+series that converges: everything below the top level adds up to only a third of
+it, and the whole chain costs **4/3 of level 0**.
+
+Two things follow, and they surprise people in opposite directions.
+
+**Throwing the chain away barely helps.** All the smaller levels together are a
+third of the top one, so dropping them saves 25% and costs you every benefit
+mipmaps provide. That is why `--mips single` is a bad trade almost always.
+
+**Halving the top level quarters everything.** Drop one level from the front and
+the whole remaining chain is a quarter of what it was, because the new top level
+is a quarter and the ratio below it is unchanged.
+
+For one 4096² BC7 texture with a full 13-level chain:
+
+| Resident in VRAM | How | VRAM | of original |
+| --- | --- | --- | --- |
+| whole chain, 4096 down | untouched | 21.33 MiB | 100% |
+| 4096 alone, no chain | `--mips single` | 16.00 MiB | 75% |
+| chain from 2048 down | `--max-size 2048` | 5.33 MiB | 25% |
+| chain from 1024 down | `--max-size 1024` | 1.33 MiB | 6.3% |
+| chain from 512 down | `--max-size 512` | 341.4 KiB | 1.6% |
+| chain from 256 down | `--max-size 256` | 85.4 KiB | 0.4% |
+
+Read the last four rows as one rule: **every halving costs a quarter as much.**
+Going from a 2048 cap to 1024 saves nearly as much again, in relative terms, as
+the first halving did.
+
+### Where streaming changes the arithmetic
+
+`--stream N` keeps exactly the same levels resident as `--max-size N` — the tail
+from N downwards — so it lands on exactly the same row of that table:
+
+| | VRAM | Largest level you can still see |
+| --- | --- | --- |
+| `--max-size 256` | 85.4 KiB | 256² — the rest is gone for good |
+| `--stream 256` | 85.4 KiB | **4096²**, loaded on demand |
+
+Identical video memory, and one of them keeps the texture. The difference is
+paid on disk (the full chain moves to `.stream` rather than being discarded) and
+in latency: the sharp levels arrive shortly after the texture comes into view,
+so a close-up can be briefly soft. `--max-size` never has that pop-in because
+there is nothing left to load.
+
+That is the whole reason `--stream` exists. Every other option here buys video
+memory with quality; this one buys it with disk space.
+
+On a real 205.6 MiB mod, 23 of whose textures carried full chains that were
+entirely resident:
+
+| | video memory | `.stream` on disk |
+| --- | --- | --- |
+| untouched | 205.6 MiB | 1.5 MiB |
+| `--max-size 1024` | 117.6 MiB | 1.5 MiB |
+| `--stream 256` | 99.4 MiB | 91.5 MiB |
+| `--max-size 1024 --stream 256` | 99.4 MiB | 15.5 MiB |
+
+The last row is usually the one you want. The cap decides how much detail is
+worth *storing*; the floor decides how much is worth keeping *resident*. Same
+video memory as streaming alone, for a sixth of the disk.
+
+(The rest of the 99.4 MiB is textures with no mip chain at all, which have
+nothing to stream. Streaming can only move levels that already exist.)
 
 ## Resizing, and whether it will look blurry
 
