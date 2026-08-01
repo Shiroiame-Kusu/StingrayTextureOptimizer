@@ -20,6 +20,12 @@ internal sealed class CommandLine
     public bool NoCollapse { get; private init; }
     public bool NoDedup { get; private init; }
     public int MaxDimension { get; private init; }
+
+    /// <summary>
+    /// Resident floor for mip streaming, or 0 to leave residency alone. Off by
+    /// default: the streaming flag it has to write is not fully understood.
+    /// </summary>
+    public int StreamFloor { get; private init; }
     public EncoderBackend Backend { get; private init; } = EncoderBackend.Auto;
     public MipMode MipMode { get; private init; } = MipMode.KeepChain;
     public OptimizationStrategy Strategy { get; private init; } = OptimizationStrategy.Balanced;
@@ -33,6 +39,7 @@ internal sealed class CommandLine
         string? path = null, output = null, backup = null, original = null;
         int? threads = null;
         var maxDimension = 0;
+        var streamFloor = 0;
         var backend = EncoderBackend.Auto;
         var mipMode = MipMode.KeepChain;
         bool dryRun = false, noCollapse = false, noDedup = false;
@@ -53,6 +60,7 @@ internal sealed class CommandLine
                 case "--original": original = Next(it, arg); break;
                 case "--threads": threads = ParseThreads(Next(it, arg)); break;
                 case "--max-size": maxDimension = ParseMaxSize(Next(it, arg)); break;
+                case "--stream": streamFloor = ParseStreamFloor(Next(it, arg)); break;
                 case "--encoder": backend = ParseBackend(Next(it, arg)); break;
                 case "--mips": mipMode = ParseMipMode(Next(it, arg)); break;
                 case "--strategy": strategy = ParseStrategy(Next(it, arg)); break;
@@ -72,7 +80,7 @@ internal sealed class CommandLine
             Path = path, Output = output, Backup = backup, Original = original,
             Threads = threads, DryRun = dryRun, NoCollapse = noCollapse, NoDedup = noDedup,
             Strategy = strategy, Quality = quality, MaxDimension = maxDimension,
-            Backend = backend, MipMode = mipMode,
+            Backend = backend, MipMode = mipMode, StreamFloor = streamFloor,
         };
     }
 
@@ -100,6 +108,14 @@ internal sealed class CommandLine
         if (!int.TryParse(value, out var n) || n < 4 || (n & (n - 1)) != 0)
             throw new ArgumentException(
                 $"--max-size needs a power of two of at least 4, got '{value}'.");
+        return n;
+    }
+
+    private static int ParseStreamFloor(string value)
+    {
+        if (!int.TryParse(value, out var n) || n < 4 || (n & (n - 1)) != 0)
+            throw new ArgumentException(
+                $"--stream needs a power of two of at least 4, got '{value}'.");
         return n;
     }
 

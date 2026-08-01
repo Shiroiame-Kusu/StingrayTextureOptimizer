@@ -127,6 +127,7 @@ public sealed class BundleFileEntry
     public string TypeName => StingrayTypeIds.NameOf(TypeId);
     public string Name => $"{FileId:X16}";
     public bool HasGpuData => GpuSize > 0;
+    public bool HasStreamData => StreamSize > 0;
     public bool IsTexture => TypeId == StingrayTypeIds.Texture;
 
     public static BundleFileEntry Read(ReadOnlySpan<byte> data, int entryOffset) => new()
@@ -155,5 +156,13 @@ public sealed class BundleFileEntry
     {
         BinaryPrimitives.WriteUInt64LittleEndian(bundleImage[(EntryOffset + 0x20)..], gpuOffset);
         BinaryPrimitives.WriteUInt32LittleEndian(bundleImage[(EntryOffset + 0x40)..], gpuSize);
+    }
+
+    /// <summary>Writes stream offset/size, the <c>.stream</c> counterpart of
+    /// <see cref="WriteGpuFields"/>.</summary>
+    public void WriteStreamFields(Span<byte> bundleImage, ulong streamOffset, uint streamSize)
+    {
+        BinaryPrimitives.WriteUInt64LittleEndian(bundleImage[(EntryOffset + 0x18)..], streamOffset);
+        BinaryPrimitives.WriteUInt32LittleEndian(bundleImage[(EntryOffset + 0x3C)..], streamSize);
     }
 }

@@ -385,6 +385,39 @@ texture is something like a UI element that is never minified.
 Streamed textures are skipped under both: their top levels live in the `.stream`
 file, so slicing `gpu_resources` alone would desynchronise the two.
 
+### Stream mips — `--stream N` (GUI: *Stream mips*) — experimental, off by default
+
+Every other option here buys video memory with quality. This one buys it with
+**disk space instead, and costs no quality at all.**
+
+Stingray can already keep a texture's chain in the `.stream` file and hold only
+a small tail permanently in video memory, loading the sharp levels on demand
+when the texture is actually on screen. Mod tooling routinely writes "not
+streamed" into every texture it touches, which throws that away — so a 4096²
+BC7 texture sits in VRAM at its full 21.3 MiB whether or not you are looking at
+it. `--stream 256` moves the whole chain into `.stream` and keeps only 256² and
+below resident.
+
+On the Asteria mod, at `--stream 256`:
+
+| | before | after |
+| --- | --- | --- |
+| video memory | 205.6 MiB | **99.4 MiB** |
+| `.stream` on disk | 1.5 MiB | 95.9 MiB |
+
+19 textures converted. Nothing is discarded and nothing is re-encoded — every
+byte written is a copy of a byte that was already there, which the tests check
+against the original. The textures that do not convert are the single-mip ones,
+which have no chain to move.
+
+**Why it is off by default.** The conversion has to write one field in the
+Stingray prefix whose meaning is not established: every streamed texture carries
+1 or 2 there, and the 53 samples available do not explain which. This tool
+writes 2 for chains of 9 levels or more and 1 otherwise, the split that fits
+what was observed. If a converted texture fails to load in game, that field is
+the first thing to change — see `docs/bundle-format.md`. Test before relying on
+it, and keep the backup.
+
 ### Collapse solid colours — `--no-collapse` disables (GUI: *Collapse solid colours*)
 
 A texture whose every pixel is identical is rewritten at 16×16. Visually

@@ -57,6 +57,22 @@ public sealed class TexturePlanItem
     public int TargetMipCount { get; set; } = 1;
 
     /// <summary>
+    /// First level to keep resident once the texture is converted to a streamed
+    /// one, or null to leave its residency alone.
+    /// </summary>
+    public int? StreamResidentMip { get; set; }
+
+    /// <summary>
+    /// True when this texture is being moved into <c>.stream</c>. Nothing is
+    /// dropped or re-encoded: the full chain is written to the stream file and
+    /// only the tail from <see cref="StreamResidentMip"/> stays in video memory.
+    /// </summary>
+    public bool IsStreamConversion => StreamResidentMip is not null;
+
+    /// <summary>Bytes this texture will occupy in <c>.stream</c>.</summary>
+    public long PredictedStreamSize => IsStreamConversion ? Texture.MipChain.Sum() : 0;
+
+    /// <summary>
     /// True when the payload is sliced out of the existing chain rather than
     /// re-encoded. Any mipmapped texture takes this path: re-encoding one would
     /// mean rebuilding the whole chain, and treating its payload as a single
@@ -78,6 +94,11 @@ public sealed class TexturePlanItem
         get
         {
             if (!Include) return CurrentSize;
+
+            // A streamed texture only keeps its tail resident; the rest is still
+            // there, just in .stream rather than in video memory.
+            if (IsStreamConversion) return Texture.MipChain.Skip(StreamResidentMip!.Value).Sum();
+
             if (!IsMipDrop) return TargetFormat.SurfaceSize(TargetWidth, TargetHeight);
 
             // A mipmapped texture costs the sum of the levels that survive, not
@@ -100,6 +121,7 @@ public sealed class TexturePlanItem
         TargetHeight = Recommendation.Height;
         MipLevelsToDrop = Recommendation.MipLevelsToDrop;
         TargetMipCount = Recommendation.TargetMipCount;
+        StreamResidentMip = Recommendation.StreamResidentMip;
         Include = true;
     }
 }
@@ -228,6 +250,16 @@ public sealed class OptimizationPlan
 
     public long PredictedFootprintSaving => CurrentGpuFootprint - PredictedGpuFootprint;
 
+    /// <summary>Textures being moved into <c>.stream</c>.</summary>
+    public int StreamConversionCount => Textures.Count(t => t.Include && t.IsStreamConversion);
+
+    /// <summary>
+    /// Bytes the conversions add to <c>.stream</c>. This is what streaming costs:
+    /// the saving is in video memory, and it is paid for on disk.
+    /// </summary>
+    public long AddedStreamBytes =>
+        Textures.Where(t => t.Include && t.IsStreamConversion).Sum(t => t.PredictedStreamSize);
+
     internal static long Align(long value)
     {
         var rem = value % BundleFormat.GpuAlignment;
@@ -245,6 +277,7 @@ public sealed class OptimizationPlan
         IProgress<PlanProgress>? progress = null,
         int maxDimension = 0,
         MipMode mipMode = MipMode.KeepChain,
+        int streamFloor = 0,
         CancellationToken cancellationToken = default)
     {
         var items = new List<TexturePlanItem>();
@@ -296,7 +329,8 @@ public sealed class OptimizationPlan
 
             var recommendation = TextureAnalyzer.Recommend(
                 analysis, texture.Width, texture.Height, strategy, collapseSolidColours,
-                maxDimension, texture.SourceFormat, texture.MipMapCount, mipMode);
+                maxDimension, texture.SourceFormat, texture.MipMapCount, mipMode,
+                streamFloor, texture.Header.Offset);
 
             var item = new TexturePlanItem
             {

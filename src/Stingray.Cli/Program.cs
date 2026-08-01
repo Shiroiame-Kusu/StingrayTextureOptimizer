@@ -55,7 +55,8 @@ internal static class Program
             Console.WriteLine($"  {type.Count,4} x {type.TypeName}");
 
         var plan = OptimizationPlan.Build(bundle, gpu, options.Strategy, !options.NoCollapse,
-                                          maxDimension: options.MaxDimension, mipMode: options.MipMode);
+                                          maxDimension: options.MaxDimension, mipMode: options.MipMode,
+                                          streamFloor: options.StreamFloor);
         plan.Deduplicate = !options.NoDedup;
         PrintPlan(plan);
         return 0;
@@ -67,7 +68,8 @@ internal static class Program
         using var gpu = OpenGpu(bundle);
 
         var plan = OptimizationPlan.Build(bundle, gpu, options.Strategy, !options.NoCollapse,
-                                          maxDimension: options.MaxDimension);
+                                          maxDimension: options.MaxDimension, mipMode: options.MipMode,
+                                          streamFloor: options.StreamFloor);
         plan.Deduplicate = !options.NoDedup;
         PrintPlan(plan);
 
@@ -123,7 +125,8 @@ internal static class Program
         });
 
         var result = BundleOptimizer.Apply(plan, gpu, outputBundle, outputGpu, encodeOptions,
-                                           progress, plan.Deduplicate);
+                                           progress, plan.Deduplicate,
+                                           outputStreamPath: outputBundle + ".stream");
 
         Console.WriteLine($"\ngpu_resources {Human(result.OriginalGpuSize)} -> {Human(result.NewGpuSize)} "
                         + $"({result.Ratio:P1}, saved {Human(result.Saved)}) in {result.Elapsed.TotalSeconds:F1}s");
@@ -168,6 +171,11 @@ internal static class Program
             Console.WriteLine($"\nduplicates: {plan.DuplicateEntryCount} entr(ies) repeat a payload another "
                             + $"entry already has, wasting {Human(plan.RedundantBytes)}. "
                             + "These are stored once and shared.");
+
+        if (plan.StreamConversionCount > 0)
+            Console.WriteLine($"\nstreaming: {plan.StreamConversionCount} texture(s) move their whole mip "
+                            + $"chain into .stream, adding {Human(plan.AddedStreamBytes)} on disk. "
+                            + "Nothing is discarded — full resolution still loads on demand.");
 
         Console.WriteLine($"\ndisk  {Human(plan.CurrentGpuSize),10} -> {Human(plan.PredictedGpuSize),10}"
                         + $"   (saves {Human(plan.PredictedSaving)})");
@@ -256,6 +264,14 @@ internal static class Program
                               and leaves the texture mipmapped; single keeps one
                               level and nothing else, which is smaller but brings
                               back shimmering when the texture is minified
+          --stream <n>        EXPERIMENTAL, off by default. Move a mipmapped texture's
+                              whole chain into .stream and keep only levels of n or
+                              smaller resident. Nothing is discarded and nothing is
+                              re-encoded, so full resolution still loads when the
+                              texture is on screen — video memory drops sharply and
+                              the disk cost goes up. Try --stream 256 first.
+                              One field this writes is not fully understood; test in
+                              game before relying on it, and keep the backup.
           --max-size <n>      cap texture dimensions at n (power of two); larger ones are
                               halved until they fit. The plan reports the measured
                               detail cost per texture before you commit.

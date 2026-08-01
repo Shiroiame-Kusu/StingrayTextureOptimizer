@@ -136,5 +136,12 @@ public sealed class FormatRecommendation
     /// <summary>How many levels remain. 1 means the chain is gone.</summary>
     public int TargetMipCount { get; init; } = 1;
 
+    /// <summary>
+    /// First mip level to keep resident when converting the texture to a streamed
+    /// one, or null to leave its residency alone. Nothing is discarded: the whole
+    /// chain moves to <c>.stream</c> and only this tail stays in video memory.
+    /// </summary>
+    public int? StreamResidentMip { get; init; }
+
     public long PredictedSize => Format.SurfaceSize(Width, Height);
 }

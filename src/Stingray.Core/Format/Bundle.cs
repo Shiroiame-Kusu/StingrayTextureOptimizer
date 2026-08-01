@@ -35,6 +35,8 @@ public sealed class Bundle
 
     public IEnumerable<BundleFileEntry> Textures => Files.Where(f => f.IsTexture);
     public IEnumerable<BundleFileEntry> GpuBackedFiles => Files.Where(f => f.HasGpuData);
+    public IEnumerable<BundleFileEntry> StreamBackedFiles => Files.Where(f => f.HasStreamData);
+    public bool HasStreamFile => File.Exists(StreamPath);
 
     public static Bundle Load(string path)
     {

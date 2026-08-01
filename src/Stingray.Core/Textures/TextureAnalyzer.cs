@@ -91,8 +91,37 @@ public static class TextureAnalyzer
         int maxDimension = 0,
         DxgiFormat sourceFormat = DxgiFormat.Unknown,
         int mipCount = 1,
-        MipMode mipMode = MipMode.KeepChain)
+        MipMode mipMode = MipMode.KeepChain,
+        int streamFloor = 0,
+        int prefixLength = 0)
     {
+        // Streaming beats every other option when it applies: the whole chain
+        // moves to .stream and only a small tail stays resident, so video memory
+        // collapses while the full-resolution levels remain available. Nothing is
+        // discarded and nothing is re-encoded, so unlike a mip drop it costs no
+        // quality at all — only disk.
+        if (streamFloor > 0 && mipCount > 1 && sourceFormat.IsSizable()
+            && StingrayTexturePrefix.CanDescribe(prefixLength, mipCount))
+        {
+            var resident = DxgiFormatInfo.LevelsToDrop(width, height, mipCount, streamFloor);
+            var chain = sourceFormat.MipChain(width, height, mipCount);
+            var residentBytes = chain.Skip(resident).Sum();
+
+            return new FormatRecommendation
+            {
+                Format = sourceFormat,
+                Width = width,
+                Height = height,
+                TargetMipCount = mipCount,
+                StreamResidentMip = resident,
+                IsLossless = true,
+                Rationale = $"streamed: the whole {mipCount}-level chain moves to .stream, "
+                          + $"leaving {Math.Max(1, width >> resident)}x{Math.Max(1, height >> resident)} "
+                          + $"and below resident ({residentBytes:N0} bytes); "
+                          + "full resolution still loads on demand",
+            };
+        }
+
         // A texture that carries a mip chain can be shrunk by discarding its top
         // levels: the ones that remain are the author's own pixels, already
         // encoded, so nothing is recompressed and nothing is resampled. That is

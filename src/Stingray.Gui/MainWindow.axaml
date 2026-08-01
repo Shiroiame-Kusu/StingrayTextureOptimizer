@@ -66,6 +66,13 @@
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
+                    ToolTip.Tip="EXPERIMENTAL, off by default.&#x0a;Moves a mipmapped texture's whole chain into the .stream file and keeps only levels of the chosen size or smaller in video memory.&#x0a;Nothing is discarded and nothing is re-encoded: the engine loads full resolution again whenever the texture is actually on screen.&#x0a;This is the only option here that cuts video memory without costing quality — it costs disk space instead.&#x0a;One field the conversion has to write is not fully understood, so test in game and keep the backup.">
+          <TextBlock Text="Stream mips" VerticalAlignment="Center" />
+          <ComboBox ItemsSource="{Binding StreamFloors}" SelectedItem="{Binding StreamFloor}"
+                    MinWidth="170" IsEnabled="{Binding !IsBusy}" />
+        </StackPanel>
+
+        <StackPanel Orientation="Horizontal" Spacing="6"
                     ToolTip.Tip="Which compressor does the work.&#x0a;Fast uses the bundled Compressonator CMP_Core library: several times quicker and slightly better quality.&#x0a;Portable uses the pure-managed encoder, which always works.&#x0a;Automatic prefers Fast and falls back to Portable when the native library is missing.">
           <TextBlock Text="Encoder" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Backends}" SelectedItem="{Binding Encoder}"

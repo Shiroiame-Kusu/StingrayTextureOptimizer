@@ -57,6 +57,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         new(512, "512 max"),
     ];
 
+    /// <summary>
+    /// Resident floor for mip streaming. Off by default: the conversion writes
+    /// one field whose meaning is not fully established, so it needs testing in
+    /// game before anyone relies on it.
+    /// </summary>
+    public IReadOnlyList<StreamFloor> StreamFloors { get; } =
+    [
+        new(0, "Off"),
+        new(512, "Keep 512 resident"),
+        new(256, "Keep 256 resident"),
+        new(128, "Keep 128 resident"),
+        new(64, "Keep 64 resident"),
+    ];
+
     [ObservableProperty] private string? _bundlePath;
     [ObservableProperty] private string _status = "Open a bundle to begin.";
     [ObservableProperty] private bool _isBusy;
@@ -71,6 +85,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// and every affected texture reports its measured cost before you commit.
     /// </summary>
     [ObservableProperty] private SizeCap _sizeCap = new(0, "Keep original");
+    [ObservableProperty] private StreamFloor _streamFloor = new(0, "Off");
     [ObservableProperty] private MipModeChoice _mipSelection = new(MipMode.KeepChain, "Keep smaller levels");
     [ObservableProperty] private StrategyChoice _strategy =
         new(OptimizationStrategy.Balanced, "Balanced (BC1 opaque, BC7 with alpha)");
@@ -149,6 +164,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var cap = SizeCap.Value;
             var strategy = Strategy.Value;
             var mips = MipSelection.Value;
+            var floor = StreamFloor.Value;
             var (plan, bundle) = await Task.Run(() =>
             {
                 var loaded = Bundle.Load(path);
@@ -158,7 +174,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
                 using var gpu = GpuResourceFile.Open(loaded.GpuResourcePath);
                 return (OptimizationPlan.Build(loaded, gpu, strategy, CollapseSolidColours,
-                                               maxDimension: cap, mipMode: mips), loaded);
+                                               maxDimension: cap, mipMode: mips,
+                                               streamFloor: floor), loaded);
             });
 
             _bundle = bundle;
@@ -235,7 +252,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                         ThreadCount = ThreadCount,
                         Backend = Encoder.Value,
                     },
-                    reporter, Deduplicate);
+                    reporter, Deduplicate, outputStreamPath: _bundle.StreamPath);
             });
 
             var report = await Task.Run(() => BundleVerifier.Verify(
@@ -309,6 +326,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
         RecalculateTotals();
     }
 
+    partial void OnStreamFloorChanged(StreamFloor value)
+    {
+        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
+    }
+
     partial void OnSizeCapChanged(SizeCap value)
     {
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
@@ -345,6 +367,12 @@ public sealed record QualityChoice(EncodeQuality Value, string Label)
 }
 
 /// <summary>A maximum-dimension choice, with the label shown in the dropdown.</summary>
+/// <summary>A resident floor choice for mip streaming.</summary>
+public sealed record StreamFloor(int Value, string Label)
+{
+    public override string ToString() => Label;
+}
+
 public sealed record SizeCap(int Value, string Label)
 {
     public override string ToString() => Label;

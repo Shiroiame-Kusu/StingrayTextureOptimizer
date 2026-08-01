@@ -44,7 +44,8 @@ public static class BundleOptimizer
         EncodeOptions? encodeOptions = null,
         IProgress<ApplyProgress>? progress = null,
         bool deduplicate = true,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        string? outputStreamPath = null)
     {
         ArgumentNullException.ThrowIfNull(plan);
         ArgumentNullException.ThrowIfNull(sourceGpu);
@@ -58,6 +59,7 @@ public static class BundleOptimizer
         //    produce identical output, so each combination is encoded once however
         //    many entries share it.
         var encoded = new Dictionary<ulong, byte[]>();
+        var streamPayloads = new Dictionary<ulong, byte[]>();
         var encodeCache = new Dictionary<string, byte[]>(StringComparer.Ordinal);
 
         for (var i = 0; i < included.Count; i++)
@@ -68,6 +70,17 @@ public static class BundleOptimizer
 
             var entry = item.Texture.Entry;
             var surface = sourceGpu.Read(entry.GpuOffset, entry.GpuSize);
+
+            // Converting to a streamed texture discards nothing: the whole chain
+            // goes to .stream and the tail below the resident level is what stays
+            // in video memory. Both are slices of what is already there.
+            if (item.IsStreamConversion)
+            {
+                var resident = item.Texture.MipChain.Take(item.StreamResidentMip!.Value).Sum();
+                streamPayloads[entry.FileId] = surface;
+                encoded[entry.FileId] = surface.AsSpan((int)resident).ToArray();
+                continue;
+            }
 
             // Dropping mip levels is a slice, not an encode: skip past the levels
             // being discarded and keep the rest byte for byte.
@@ -156,7 +169,27 @@ public static class BundleOptimizer
             }
         }
 
-        // 3. Repoint the table and rewrite the DDS headers.
+        // 3. Rebuild .stream, but only when something is actually being converted.
+        //    With the feature off this is skipped entirely and the existing stream
+        //    file — along with every offset pointing into it — is left untouched.
+        var streamTemp = (string?)null;
+        var streamPath = outputStreamPath ?? outputBundlePath + ".stream";
+        if (streamPayloads.Count > 0)
+        {
+            streamTemp = streamPath + ".tmp";
+            WriteStreamFile(plan, sourceGpu, streamPayloads, streamTemp, image,
+                            deduplicate, progress, cancellationToken);
+        }
+        else if (!PathsMatch(streamPath, plan.Bundle.StreamPath) && plan.Bundle.HasStreamFile)
+        {
+            // Writing elsewhere and not touching the stream data: it still has to
+            // travel with the bundle, because the table keeps pointing into it.
+            // Without this the output would be missing every streamed payload.
+            Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(streamPath))!);
+            File.Copy(plan.Bundle.StreamPath, streamPath, overwrite: true);
+        }
+
+        // 4. Repoint the table and rewrite the DDS headers.
         foreach (var entry in ordered)
         {
             var (offset, size) = newOffsets[entry.FileId];
@@ -167,6 +200,21 @@ public static class BundleOptimizer
         {
             var entry = item.Texture.Entry;
             var payload = image.AsSpan((int)entry.Offset, (int)entry.Size);
+
+            // A converted texture keeps its dimensions, format and level count —
+            // nothing was thrown away. What changes is the Stingray prefix, which
+            // now describes the chain and where residency starts.
+            if (item.IsStreamConversion)
+            {
+                StingrayTexturePrefix.WriteStreaming(
+                    payload, item.Texture.Header.Offset, item.Texture.SourceFormat,
+                    item.Texture.Width, item.Texture.Height,
+                    item.Texture.MipMapCount, item.StreamResidentMip!.Value);
+                StingrayTexturePrefix.PatchDdsForStreaming(
+                    payload, item.Texture.Header, item.Texture.SourceFormat, item.Texture.Width);
+                continue;
+            }
+
             // For a sliced chain the DDS "linear size" describes the new level 0,
             // not the whole payload, and the level count shrinks with it.
             var mips = item.IsMipDrop ? item.TargetMipCount : (int?)null;
@@ -179,11 +227,14 @@ public static class BundleOptimizer
                 linearSize, mips);
         }
 
-        // 4. Commit both files.
+        // 5. Commit. Each rename is atomic but the set is not, so the stream file
+        //    lands before the table that points into it: a bundle referring to
+        //    stream data that is already there is recoverable, the reverse is not.
         var bundleTemp = outputBundlePath + ".tmp";
         File.WriteAllBytes(bundleTemp, image);
-        File.Move(bundleTemp, outputBundlePath, overwrite: true);
+        if (streamTemp is not null) File.Move(streamTemp, streamPath, overwrite: true);
         File.Move(gpuTemp, outputGpuPath, overwrite: true);
+        File.Move(bundleTemp, outputBundlePath, overwrite: true);
 
         stopwatch.Stop();
         return new OptimizationResult
@@ -195,6 +246,106 @@ public static class BundleOptimizer
             DeduplicatedBytes = deduplicatedBytes,
             Elapsed = stopwatch.Elapsed,
         };
+    }
+
+    private static bool PathsMatch(string a, string b) =>
+        string.Equals(Path.GetFullPath(a), Path.GetFullPath(b),
+                      OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase
+                                                  : StringComparison.Ordinal);
+
+    /// <summary>
+    /// Writes the <c>.stream</c> file, carrying existing streamed payloads through
+    /// and appending the newly converted ones, then repoints every stream field.
+    /// </summary>
+    /// <remarks>
+    /// Packed exactly like <c>.gpu_resources</c>: 64-byte aligned, in file-table
+    /// order, ending at the last payload with no slack.
+    /// </remarks>
+    private static void WriteStreamFile(
+        OptimizationPlan plan,
+        GpuResourceFile sourceGpu,
+        Dictionary<ulong, byte[]> streamPayloads,
+        string streamTemp,
+        byte[] image,
+        bool deduplicate,
+        IProgress<ApplyProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        var bundle = plan.Bundle;
+
+        // Entries that end up with stream data: those that already had some, plus
+        // everything being converted now.
+        var targets = bundle.Files
+            .Where(f => f.HasStreamData || streamPayloads.ContainsKey(f.FileId))
+            .ToList();
+
+        // Only opened when something already lives in .stream and has to be
+        // carried across; a bundle with no stream file at all is the common case.
+        var carriesExisting = targets.Any(f => f.HasStreamData && !streamPayloads.ContainsKey(f.FileId));
+        using var existing = carriesExisting && bundle.HasStreamFile
+            ? GpuResourceFile.Open(bundle.StreamPath)
+            : null;
+
+        if (carriesExisting && existing is null)
+            throw new InvalidDataException(
+                $"{Path.GetFileName(bundle.StreamPath)} is missing, but the bundle "
+              + "declares streamed payloads that have to be preserved.");
+
+        var placements = new Dictionary<ulong, (ulong Offset, uint Size)>();
+        var written = new Dictionary<string, (ulong Offset, uint Size)>(StringComparer.Ordinal);
+
+        using (var output = new FileStream(streamTemp, FileMode.Create, FileAccess.Write,
+                                           FileShare.None, 1 << 20))
+        {
+            var padding = new byte[BundleFormat.GpuAlignment];
+            long cursor = 0;
+
+            for (var i = 0; i < targets.Count; i++)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var entry = targets[i];
+                progress?.Report(new ApplyProgress(i, targets.Count, "Streaming", entry.Name));
+
+                streamPayloads.TryGetValue(entry.FileId, out var payload);
+                var size = payload is not null ? (uint)payload.Length : entry.StreamSize;
+
+                string? key = null;
+                if (deduplicate)
+                {
+                    var hash = payload is not null
+                        ? System.Security.Cryptography.SHA256.HashData(payload)
+                        : existing!.Hash(entry.StreamOffset, entry.StreamSize);
+                    key = Convert.ToHexString(hash);
+
+                    if (written.TryGetValue(key, out var already) && already.Size == size)
+                    {
+                        placements[entry.FileId] = already;
+                        continue;
+                    }
+                }
+
+                var aligned = OptimizationPlan.Align(cursor);
+                if (aligned != cursor)
+                {
+                    output.Write(padding, 0, (int)(aligned - cursor));
+                    cursor = aligned;
+                }
+
+                if (payload is not null) output.Write(payload, 0, payload.Length);
+                else existing!.CopyTo(entry.StreamOffset, entry.StreamSize, output);
+
+                var placement = ((ulong)cursor, size);
+                placements[entry.FileId] = placement;
+                if (key is not null) written[key] = placement;
+                cursor += size;
+            }
+        }
+
+        foreach (var entry in targets)
+        {
+            var (offset, size) = placements[entry.FileId];
+            entry.WriteStreamFields(image, offset, size);
+        }
     }
 
     /// <summary>

@@ -71,6 +71,28 @@ internal sealed class SyntheticBundle : IDisposable
     }
 
     /// <summary>
+    /// Adds a streamed texture shaped the way real ones are: the whole chain in
+    /// <c>.stream</c>, a duplicate of the tail resident in <c>.gpu_resources</c>,
+    /// and a prefix carrying the level table.
+    /// </summary>
+    public SyntheticBundle AddStreamedChain(int width, int height, DxgiFormat format,
+                                            int mipCount, int firstResidentMip)
+    {
+        var chain = format.MipChain(width, height, mipCount);
+        var full = new byte[chain.Sum()];
+        for (var i = 0; i < full.Length; i++) full[i] = (byte)(i * 13 + 3);
+
+        var resident = full.AsSpan((int)chain.Take(firstResidentMip).Sum()).ToArray();
+
+        var cpu = BuildTextureCpuPayload(width, height, mipCount, (uint)format, linearSize: 0);
+        Stingray.Core.Textures.StingrayTexturePrefix.WriteStreaming(
+            cpu, StingrayPrefix, format, width, height, mipCount, firstResidentMip);
+
+        _entries.Add((StingrayTypeIds.Texture, cpu, resident, full));
+        return this;
+    }
+
+    /// <summary>
     /// Adds an already-compressed texture carrying a full mip chain, the shape
     /// that mip dropping operates on.
     /// </summary>
@@ -147,6 +169,10 @@ internal sealed class SyntheticBundle : IDisposable
             BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(p + 0x20), (ulong)gpuCursor);
             if (stream.Length > 0)
             {
+                // Real .stream files align payloads the same way .gpu_resources does.
+                var streamPad = (int)(OptimizationAlign(streamCursor) - streamCursor);
+                if (streamPad > 0) { streamFile.Write(new byte[streamPad]); streamCursor += streamPad; }
+
                 BinaryPrimitives.WriteUInt64LittleEndian(image.AsSpan(p + 0x18), (ulong)streamCursor);
                 BinaryPrimitives.WriteUInt32LittleEndian(image.AsSpan(p + 0x3C), (uint)stream.Length);
                 streamFile.Write(stream);

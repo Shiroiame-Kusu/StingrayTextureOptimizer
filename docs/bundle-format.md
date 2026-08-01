@@ -211,7 +211,11 @@ reached through `.patch_N` mod bundles rather than the shipped game data.
 | 2 | 256×256 BC5 and BC7 (9 mips, resident 3); 256×256 RGBA8 (9 mips, resident 4) |
 
 Anything converting a resident texture into a streamed one must pick a value
-here, so this needs settling by experiment before such a feature can ship.
+here. This tool's `--stream` option writes 2 for chains of 9 levels or more and
+1 otherwise, which is the split that fits the observations — but it *is* a
+guess, which is why that option is off by default and documented as
+experimental. If a converted texture fails to load, this is the field to change
+first.
 
 This matters for memory rather than disk. A 4096×4096 BC7 texture with a full
 13-level chain is 21.3 MiB; if the field says `0xFFFFFFFF`, all of it is resident
