@@ -69,6 +69,12 @@ public static class S
 
     public static string ColumnMod => T("Mod", "所属 Mod");
 
+    public static string StreamReachesNothing(int chainless) => T(
+        $" Stream mips reaches nothing here: {chainless} texture(s) carry no mip chain and none of the "
+      + "rest do either. Tick Generate mipmaps to build chains for them first.",
+        $" 流式 Mip 在这里没有作用：有 {chainless} 张纹理没有 mip 链，其余的也没有。"
+      + "请先勾选“生成 Mipmap”给它们建链。");
+
     public static string ConfirmBatchHeading(int bundles) =>
         T($"Optimize {bundles} bundles?", $"要优化这 {bundles} 个资源包吗？");
 

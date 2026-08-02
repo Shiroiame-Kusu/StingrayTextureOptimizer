@@ -41,6 +41,26 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     private bool HasBatch => _batch.Count > 0;
 
+    /// <summary>
+    /// Textures in whatever has been analysed that already carry a mip chain, or
+    /// -1 when nothing has been analysed and the question cannot be answered.
+    /// </summary>
+    private int AnalysedChainedCount =>
+        HasBatch ? _batch.Sum(b => b.Plan.ChainedCount) : _plan?.ChainedCount ?? -1;
+
+    private int AnalysedChainlessCount =>
+        HasBatch ? _batch.Sum(b => b.Plan.ChainlessCount) : _plan?.ChainlessCount ?? 0;
+
+    /// <summary>
+    /// A stream floor set with no generation, over textures none of which carry a
+    /// chain, is a setting that cannot do anything. Worth saying, because nothing
+    /// else on screen would show it.
+    /// </summary>
+    private string StreamWarning =>
+        StreamFloor.Value != 0 && !AddMips && AnalysedChainedCount == 0
+            ? S.StreamReachesNothing(AnalysedChainlessCount)
+            : string.Empty;
+
     /// <summary>Whether a reviewed batch is waiting to be written.</summary>
     public bool HasAnalysedBatch => HasBatch;
 
@@ -361,6 +381,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     (_, 0) => S.CanShrink(Textures.Count, Skipped.Count),
                     _ => S.CanShrinkAndShare(Textures.Count, DuplicateEntryCount, Skipped.Count),
                 };
+            Status += StreamWarning;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
         {
@@ -431,9 +452,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             DuplicateEntryCount = _batch.Sum(b => b.Plan.DuplicateEntryCount);
             RedundantBytes = _batch.Sum(b => b.Plan.RedundantBytes);
 
-            Status = HasWork
+            Status = (HasWork
                 ? S.AnalysedMany(_batch.Count, Textures.Count, Skipped.Count)
-                : S.AnalysedNothing(_batch.Count);
+                : S.AnalysedNothing(_batch.Count)) + StreamWarning;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException
                                       or NotSupportedException or UnauthorizedAccessException)
@@ -675,7 +696,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // exactly as they are, and generating is only ever about the others. So
         // "stream what already has a chain, re-encode nothing" stays sayable,
         // which unticking is the natural way to say.
-        if (!value && StreamFloor.Value != 0 && _plan is { ChainedCount: 0 })
+        if (!value && StreamFloor.Value != 0 && AnalysedChainedCount == 0)
         {
             Link(() => StreamFloor = StreamFloors.First(f => f.Value == 0));
             return;

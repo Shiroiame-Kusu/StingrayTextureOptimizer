@@ -231,6 +231,34 @@ public class FolderScanTests : IDisposable
         Assert.False(vm.HasCheckedBundles);
     }
 
+    /// <summary>
+    /// Unticking Generate mipmaps is allowed, because streaming textures that
+    /// already have chains without re-encoding anything is a real request. But
+    /// where nothing has a chain, the floor cannot reach anything, and after a
+    /// batch analysis that is knowable — so it gets said rather than left to be
+    /// discovered when the run saves nothing.
+    /// </summary>
+    [Fact]
+    public async Task AStreamFloorThatReachesNothingIsCalledOut()
+    {
+        // Synthetic bundles are single-level, so nothing here carries a chain.
+        AddMod(folders: "Alpha");
+        AddMod(folders: "Beta");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+
+        vm.StreamFloor = vm.StreamFloors.First(f => f.Value == 64);
+        Assert.True(vm.AddMips);          // the floor turned it on
+        vm.AddMips = false;               // and it stays off if that is asked for
+
+        foreach (var node in vm.Mods) node.IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        Assert.Equal(64, vm.StreamFloor.Value);
+        Assert.Contains("Generate mipmaps", vm.Status);
+    }
+
     [Fact]
     public async Task AFolderWithNoModsSaysSoRatherThanLookingEmpty()
     {
