@@ -413,9 +413,20 @@ level 0 adds up to that. The two together are the point:
 | `--add-mips` | 229.7 MiB |
 | `--add-mips --stream 256` | **123.5 MiB** |
 
-Each of those 64 MiB textures ends up **85.4 KiB** resident, with the full
-2048² chain a stream away. The remainder is mesh data, which this tool does not
+![The same bundle with a chain built and streamed at 256](docs/images/03-stream.png)
+
+That is the same bundle as the first screenshot, with one dropdown changed.
+Picking *Keep 256 resident* ticked *Generate mipmaps* by itself — a texture with
+no chain has nothing to stream — and greyed out *Mip levels*, because a streamed
+texture keeps whatever chain it has. Each 64 MiB texture goes to **85.4 KiB**
+resident, with the full 4096² chain a stream away, and GPU memory falls from
+475.1 MiB to 123.5 MiB. The remainder is mesh data, which this tool does not
 touch.
+
+Compare the **New** column with the first screenshot: plain compression took
+those textures to 16 MiB each, and this takes them to 85 KiB — not by throwing
+anything away, but by moving it somewhere the engine can fetch it from when it
+is actually needed.
 
 This one re-encodes, so it is not lossless — but level 0 is byte-for-byte the
 same encode the texture would have got without a chain, so nothing changes in
