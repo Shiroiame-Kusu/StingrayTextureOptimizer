@@ -14,6 +14,23 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ## [Unreleased]
 
+### Added
+
+- **The GUI speaks Simplified Chinese**, and picks its language from the system
+  at startup — the POSIX locale variables on Unix, the user's UI language on
+  Windows. `STINGRAY_LANG=zh` or `=en` overrides it. Traditional Chinese locales
+  get the Simplified translation, on the grounds that it reads closer than
+  English does.
+  - Not resources and satellite assemblies: this project builds with
+    `InvariantGlobalization`, under which `CurrentUICulture.Name` is empty and
+    `new CultureInfo("zh-CN")` throws. Translations sit inline instead, so a
+    missing one is a compile error rather than a silent fallback.
+  - The command line stays English whatever the system says, because its output
+    is documented, diffed and scripted against.
+  - CI renders the published binary in both languages, since the localised
+    strings are reached only through `x:Static` and a trimming change could drop
+    them without a warning.
+
 ### Changed
 
 - **The streaming flag `--stream` writes now follows the prefix id** rather than

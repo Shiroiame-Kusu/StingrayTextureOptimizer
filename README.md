@@ -269,6 +269,30 @@ Without the first step the tool still works, just on the slower managed
 encoder — the footer of the GUI and the `analyze` output both say which one is
 in use.
 
+## Language
+
+The GUI is in **English and Simplified Chinese**, and picks one by reading the
+system's language at startup — `LC_ALL`, `LC_MESSAGES`, `LANG` or `LANGUAGE` on
+Linux and macOS, and the user's UI language on Windows. Anything Chinese gets
+Chinese; everything else gets English.
+
+To override it, set `STINGRAY_LANG`:
+
+```sh
+STINGRAY_LANG=zh stingray-tex-gui     # force Chinese
+STINGRAY_LANG=en stingray-tex-gui     # force English
+```
+
+Traditional Chinese locales (`zh_TW`, `zh_HK`) also get the Simplified
+translation, on the grounds that it reads closer than English does.
+
+The command line stays English whatever the system says: its output is
+documented, diffed and scripted against, and a locale-dependent `analyze` would
+break that.
+
+No CJK font ships with the app — it uses whatever the system provides, which on
+Windows, macOS and any desktop Linux install is already there.
+
 ## Use
 
 ### GUI

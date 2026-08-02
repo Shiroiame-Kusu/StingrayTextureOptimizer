@@ -5,6 +5,7 @@ using Avalonia.Controls;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
+using Stingray.Gui.Localization;
 using Stingray.Gui.ViewModels;
 
 namespace Stingray.Gui;
@@ -26,7 +27,7 @@ public partial class MainWindow : Window
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
         {
-            Title = "Open a Stingray bundle",
+            Title = S.OpenBundle,
             AllowMultiple = false,
             FileTypeFilter =
             [
@@ -43,11 +44,7 @@ public partial class MainWindow : Window
 
     private async void OnOptimizeClicked(object? sender, RoutedEventArgs e)
     {
-        var confirm = new ConfirmWindow(
-            "Rewrite this bundle?",
-            "The bundle and its .gpu_resources will be replaced in place. Originals are "
-          + "copied to a 'backup' folder alongside them first, and the result is verified "
-          + "automatically after writing.");
+        var confirm = new ConfirmWindow(S.ConfirmHeading, S.ConfirmBody);
 
         if (await confirm.ShowDialog<bool>(this))
             await _viewModel.OptimizeCommand.ExecuteAsync(null);

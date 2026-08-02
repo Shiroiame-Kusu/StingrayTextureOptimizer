@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using Stingray.Core.Dds;
 using Stingray.Core.Optimization;
 using Stingray.Core.Textures;
+using Stingray.Gui.Localization;
 
 namespace Stingray.Gui.ViewModels;
 
@@ -31,13 +32,13 @@ public sealed partial class TextureItemViewModel : ObservableObject
 
     public string Name => Item.Texture.Name;
     public string SourceFormat => Item.Texture.SourceFormat.DisplayName();
-    public string Content => Item.Analysis.Summary;
+    public string Content => S.Content(Item.Analysis);
 
     /// <summary>Measured cost of the planned resize, blank when none is planned.</summary>
     public string ResizeCost =>
         Item.TargetWidth == Item.Texture.Width || Item.Analysis.IsSolidColour
             ? string.Empty
-            : Item.Analysis.DetailVerdict;
+            : S.DetailVerdict(Item.Analysis.DetailHeadroomDb);
     public string Rationale => Item.Recommendation.Rationale;
     public long CurrentSize => Item.CurrentSize;
 
@@ -77,10 +78,8 @@ public sealed partial class TextureItemViewModel : ObservableObject
 
     public string FormatChangeHint =>
         Item.SupportsFormatChange
-            ? "Target block format."
-            : $"Fixed: this texture has {Item.Texture.MipMapCount} mip levels, so its "
-            + "payload is sliced out of the existing chain rather than re-encoded, "
-            + "and keeps the format it was authored in.";
+            ? S.FormatChangeFree
+            : S.FormatChangeFixed(Item.Texture.MipMapCount);
 
     [ObservableProperty]
     private bool _include;

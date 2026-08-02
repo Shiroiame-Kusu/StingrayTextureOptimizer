@@ -142,6 +142,13 @@ jobs:
           test -s /tmp/smoke.png
           echo "rendered $(stat -c%s /tmp/smoke.png) bytes"
 
+          # Again in Chinese. The localised strings are reached only through
+          # x:Static from XAML, so a trimming change could drop them without any
+          # warning; rendering the window in both languages is what would notice.
+          STINGRAY_LANG=zh xvfb-run -a ./out/gui/stingray-tex-gui --screenshot /tmp/smoke-zh.png
+          test -s /tmp/smoke-zh.png
+          echo "rendered $(stat -c%s /tmp/smoke-zh.png) bytes in Chinese"
+
       - name: Stage release layout
         shell: bash
         run: |

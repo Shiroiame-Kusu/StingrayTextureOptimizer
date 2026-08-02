@@ -6,6 +6,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="clr-namespace:Stingray.Gui.ViewModels"
         xmlns:opt="clr-namespace:Stingray.Core.Optimization;assembly=Stingray.Core"
+        xmlns:loc="clr-namespace:Stingray.Gui.Localization"
         x:Class="Stingray.Gui.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
@@ -15,10 +16,10 @@
 
     <Border DockPanel.Dock="Top" Padding="0,0,0,10">
       <StackPanel Orientation="Horizontal" Spacing="10">
-        <Button Content="Open bundle…" Click="OnOpenClicked" IsEnabled="{Binding !IsBusy}" />
+        <Button Content="{x:Static loc:S.OpenBundle}" Click="OnOpenClicked" IsEnabled="{Binding !IsBusy}" />
         <TextBlock VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis"
                    ToolTip.Tip="{Binding BundlePath}"
-                   Text="{Binding BundlePath, FallbackValue='no bundle loaded'}" />
+                   Text="{Binding BundleLabel}" />
       </StackPanel>
     </Border>
 
@@ -31,29 +32,29 @@
         </WrapPanel.Styles>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="Which block format each texture is encoded to.&#x0a;BC1 is half the size of BC7 but has 5:6:5 colour endpoints, so it bands on gradients.&#x0a;BC7 reproduces any 8-bit RGBA almost exactly.&#x0a;Smallest size also uses BC1 for pure cutout masks, since BC1 carries one alpha bit.">
-          <TextBlock Text="Format" VerticalAlignment="Center" />
+                    ToolTip.Tip="{x:Static loc:S.FormatHint}">
+          <TextBlock Text="{x:Static loc:S.FormatLabel}" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Strategies}" SelectedItem="{Binding Strategy}"
                     MinWidth="250" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="How hard the chosen encoder tries. Relative to that encoder, not an absolute quality target: Compressonator at Balanced beats BCnEncoder at Best.&#x0a;It never changes the output size, only quality and time.&#x0a;Balanced suits both encoders. Best buys very little for a lot of time.">
-          <TextBlock Text="Effort" VerticalAlignment="Center" />
+                    ToolTip.Tip="{x:Static loc:S.EffortHint}">
+          <TextBlock Text="{x:Static loc:S.EffortLabel}" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Qualities}" SelectedItem="{Binding Quality}"
                     MinWidth="110" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="Encoder worker threads.&#x0a;Defaults to leaving four cores free so the desktop stays responsive during long encodes.">
-          <TextBlock Text="Threads" VerticalAlignment="Center" />
+                    ToolTip.Tip="{x:Static loc:S.ThreadsHint}">
+          <TextBlock Text="{x:Static loc:S.ThreadsLabel}" VerticalAlignment="Center" />
           <NumericUpDown Value="{Binding ThreadCount}" Minimum="1" Maximum="{Binding MaxThreads}"
                          Increment="1" FormatString="0" MinWidth="110" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="Halve textures larger than this until they fit.&#x0a;The only lossy option here, so it is off by default.&#x0a;Each affected texture shows its measured detail cost in the Resize cost column.">
-          <TextBlock Text="Max size" VerticalAlignment="Center" />
+                    ToolTip.Tip="{x:Static loc:S.MaxSizeHint}">
+          <TextBlock Text="{x:Static loc:S.MaxSizeLabel}" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding SizeCaps}" SelectedItem="{Binding SizeCap}"
                     MinWidth="130" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
@@ -62,37 +63,37 @@
              chain, so there is nothing to drop and the choice would not apply. -->
         <StackPanel Orientation="Horizontal" Spacing="6"
                     ToolTip.Tip="{Binding MipModeHint}">
-          <TextBlock Text="Mip levels" VerticalAlignment="Center"
+          <TextBlock Text="{x:Static loc:S.MipLevelsLabel}" VerticalAlignment="Center"
                      IsEnabled="{Binding CanChooseMipMode}" />
           <ComboBox ItemsSource="{Binding MipModes}" SelectedItem="{Binding MipSelection}"
                     MinWidth="170" IsEnabled="{Binding CanChooseMipMode}" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="EXPERIMENTAL, off by default.&#x0a;The value is the largest mip level that stays in video memory permanently. Everything above it moves to the .stream file and is loaded when the texture is actually on screen, so nothing is discarded and nothing is re-encoded.&#x0a;This is the only option here that cuts video memory without costing quality — it costs disk space instead.&#x0a;Which value hardly matters: on a real mod, Off to 512 saves 102 MiB, and going all the way down to 64 saves only 6 MiB more. A higher floor keeps a usable image resident, so pop-in is less visible. 512 is the suggested choice.&#x0a;Turns Generate mipmaps on with it, because a texture with no chain has nothing to stream; setting this back to Off turns it off again.&#x0a;One field the conversion has to write cannot be worked out from the texture — shipped textures identical in every other respect carry both of its values — so what goes there is a best guess. Test in game and keep the backup.">
-          <TextBlock Text="Stream mips" VerticalAlignment="Center" />
+                    ToolTip.Tip="{x:Static loc:S.StreamMipsHint}">
+          <TextBlock Text="{x:Static loc:S.StreamMipsLabel}" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding StreamFloors}" SelectedItem="{Binding StreamFloor}"
                     MinWidth="170" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
 
         <StackPanel Orientation="Horizontal" Spacing="6"
-                    ToolTip.Tip="Which compressor does the work.&#x0a;Fast uses the bundled Compressonator CMP_Core library: several times quicker and slightly better quality.&#x0a;Portable uses the pure-managed encoder, which always works.&#x0a;Automatic prefers Fast and falls back to Portable when the native library is missing.">
-          <TextBlock Text="Encoder" VerticalAlignment="Center" />
+                    ToolTip.Tip="{x:Static loc:S.EncoderHint}">
+          <TextBlock Text="{x:Static loc:S.EncoderLabel}" VerticalAlignment="Center" />
           <ComboBox ItemsSource="{Binding Backends}" SelectedItem="{Binding Encoder}"
                     MinWidth="180" IsEnabled="{Binding !IsBusy}" />
         </StackPanel>
 
-        <CheckBox Content="Generate mipmaps"
+        <CheckBox Content="{x:Static loc:S.GenerateMipmaps}"
                   IsChecked="{Binding AddMips}" IsEnabled="{Binding !IsBusy}"
-                  ToolTip.Tip="Builds a mip chain for textures that shipped without one, which many mods do.&#x0a;Those textures shimmer and crawl when seen at an angle or from a distance, because the GPU has no smaller level to sample. This fixes that.&#x0a;On its own it costs about a third more video memory, since the chain below the top level adds up to that.&#x0a;It pays for itself with Stream mips: once a chain exists the texture can be streamed, and only the small levels need to stay resident. Picking a Stream mips level ticks this for you for that reason.&#x0a;Unticking it sets Stream mips back to Off when nothing in this bundle has a chain of its own, since there would be nothing left for a floor to reach. Where some textures do have one, the floor stays: those stream without any re-encoding.&#x0a;This one re-encodes, so it is not lossless." />
+                  ToolTip.Tip="{x:Static loc:S.GenerateMipmapsHint}" />
 
-        <CheckBox Content="Collapse solid colours"
+        <CheckBox Content="{x:Static loc:S.CollapseSolidColours}"
                   IsChecked="{Binding CollapseSolidColours}" IsEnabled="{Binding !IsBusy}"
-                  ToolTip.Tip="A texture whose every pixel is identical is rewritten at 16x16.&#x0a;Visually lossless: a constant texture samples the same at any resolution.&#x0a;Saves both file size and video memory." />
+                  ToolTip.Tip="{x:Static loc:S.CollapseSolidColoursHint}" />
 
-        <CheckBox Content="Share duplicates"
+        <CheckBox Content="{x:Static loc:S.ShareDuplicates}"
                   IsChecked="{Binding Deduplicate}" IsEnabled="{Binding !IsBusy}"
-                  ToolTip.Tip="Byte-identical payloads are stored once and referenced by every entry that uses them.&#x0a;Completely lossless, and usually the largest saving in an already-compressed bundle.&#x0a;Note: this shrinks the file only. Each entry is still its own GPU resource, so video memory is unchanged." />
+                  ToolTip.Tip="{x:Static loc:S.ShareDuplicatesHint}" />
       </WrapPanel>
     </Border>
 
@@ -107,7 +108,7 @@
             <TextBlock Opacity="0.6" FontSize="11" HorizontalAlignment="Right"
                        Text="{Binding FootprintSummary}" />
           </StackPanel>
-          <Button Content="Optimize" Click="OnOptimizeClicked"
+          <Button Content="{x:Static loc:S.Optimize}" Click="OnOptimizeClicked"
                   IsEnabled="{Binding CanOptimize}" Classes="accent" MinWidth="110" />
         </StackPanel>
         <StackPanel Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,8,0,0" Spacing="4"
@@ -119,10 +120,10 @@
              whatever the encoder status leaves. They must not share a cell. -->
         <TextBlock Grid.Row="2" Grid.Column="0" Margin="0,8,12,0"
                    Opacity="0.5" FontSize="11" TextWrapping="Wrap"
-                   Text="Stingray Texture Optimizer, Copyright (C) 2026 Shiroiame-Kusu. Free software with ABSOLUTELY NO WARRANTY, redistributable under the GNU GPL v3 or later. See LICENSE." />
+                   Text="{x:Static loc:S.Notice}" />
         <TextBlock Grid.Row="2" Grid.Column="1" Margin="0,8,0,0" Opacity="0.5" FontSize="11"
                    VerticalAlignment="Bottom" HorizontalAlignment="Right"
-                   ToolTip.Tip="The fast encoder is a small native library bundled with release downloads. Building from source? See native/README.md."
+                   ToolTip.Tip="{x:Static loc:S.EncoderFooterHint}"
                    Text="{Binding BackendStatus}" />
         <TextBlock Grid.Row="3" Grid.Column="1" Opacity="0.4" FontSize="11"
                    HorizontalAlignment="Right" Text="{Binding VersionLabel}" />
@@ -142,13 +143,13 @@
         <DataGrid.Columns>
           <DataGridCheckBoxColumn Header="" Width="40"
                                   Binding="{Binding Include, x:DataType=vm:TextureItemViewModel}" />
-          <DataGridTextColumn Header="Texture" IsReadOnly="True" Width="148"
+          <DataGridTextColumn Header="{x:Static loc:S.ColumnTexture}" IsReadOnly="True" Width="148"
                               Binding="{Binding Name, x:DataType=vm:TextureItemViewModel}" />
-          <DataGridTextColumn Header="Dimensions" IsReadOnly="True" Width="200"
+          <DataGridTextColumn Header="{x:Static loc:S.ColumnDimensions}" IsReadOnly="True" Width="200"
                               Binding="{Binding Dimensions, x:DataType=vm:TextureItemViewModel}" />
-          <DataGridTextColumn Header="From" IsReadOnly="True" Width="160"
+          <DataGridTextColumn Header="{x:Static loc:S.ColumnFrom}" IsReadOnly="True" Width="160"
                               Binding="{Binding SourceFormat, x:DataType=vm:TextureItemViewModel}" />
-          <DataGridTemplateColumn Header="To" Width="115">
+          <DataGridTemplateColumn Header="{x:Static loc:S.ColumnTo}" Width="115">
             <DataGridTemplateColumn.CellTemplate>
               <DataTemplate x:DataType="vm:TextureItemViewModel">
                 <TextBlock Text="{Binding TargetFormatName}" VerticalAlignment="Center" Margin="4,0" />
@@ -166,20 +167,20 @@
               </DataTemplate>
             </DataGridTemplateColumn.CellEditingTemplate>
           </DataGridTemplateColumn>
-          <DataGridTextColumn Header="Size" IsReadOnly="True" Width="92"
+          <DataGridTextColumn Header="{x:Static loc:S.ColumnSize}" IsReadOnly="True" Width="92"
                               Binding="{Binding CurrentSizeText, x:DataType=vm:TextureItemViewModel}" />
-          <DataGridTextColumn Header="New" IsReadOnly="True" Width="92"
+          <DataGridTextColumn Header="{x:Static loc:S.ColumnNew}" IsReadOnly="True" Width="92"
                               Binding="{Binding PredictedSizeText, x:DataType=vm:TextureItemViewModel}" />
-          <DataGridTextColumn Header="Saved" IsReadOnly="True" Width="92"
+          <DataGridTextColumn Header="{x:Static loc:S.ColumnSaved}" IsReadOnly="True" Width="92"
                               Binding="{Binding SavingText, x:DataType=vm:TextureItemViewModel}" />
-          <DataGridTextColumn Header="Content" IsReadOnly="True" Width="1*"
+          <DataGridTextColumn Header="{x:Static loc:S.ColumnContent}" IsReadOnly="True" Width="1*"
                               Binding="{Binding Content, x:DataType=vm:TextureItemViewModel}" />
-          <DataGridTextColumn Header="Resize cost" IsReadOnly="True" Width="2*"
+          <DataGridTextColumn Header="{x:Static loc:S.ColumnResizeCost}" IsReadOnly="True" Width="2*"
                               Binding="{Binding ResizeCost, x:DataType=vm:TextureItemViewModel}">
             <DataGridTextColumn.HeaderTemplate>
               <DataTemplate>
-                <TextBlock Text="Resize cost"
-                           ToolTip.Tip="Detail lost by halving this texture, measured on its own pixels.&#x0a;It does not depend on the encoder, and does not need to: block compression contributes 54-78 dB while resizing contributes 30-50 dB, so the resize term dominates the total.&#x0a;Measured against the full pipeline it is accurate to about 1 dB." />
+                <TextBlock Text="{x:Static loc:S.ColumnResizeCost}"
+                           ToolTip.Tip="{x:Static loc:S.ResizeCostHint}" />
               </DataTemplate>
             </DataGridTextColumn.HeaderTemplate>
           </DataGridTextColumn>
@@ -190,7 +191,7 @@
               Background="#20808080" IsVisible="{Binding ShowDuplicateInfo}">
         <TextBlock Text="{Binding DuplicateSummary}" TextWrapping="Wrap" FontWeight="SemiBold" />
       </Border>
-      <TextBlock Grid.Row="2" Margin="0,10,0,4" FontWeight="SemiBold" Text="Skipped"
+      <TextBlock Grid.Row="2" Margin="0,10,0,4" FontWeight="SemiBold" Text="{x:Static loc:S.Skipped}"
                  IsVisible="{Binding HasSkipped}" />
       <!-- An ItemsControl does not scroll on its own, so capping its height alone
            would clip the list at whatever row crossed the limit with no way to

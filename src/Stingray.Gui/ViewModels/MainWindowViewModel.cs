@@ -8,6 +8,7 @@ using Stingray.Core;
 using Stingray.Core.Format;
 using Stingray.Core.Optimization;
 using Stingray.Core.Textures;
+using Stingray.Gui.Localization;
 
 namespace Stingray.Gui.ViewModels;
 
@@ -20,41 +21,41 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public IReadOnlyList<StrategyChoice> Strategies { get; } =
     [
-        new(OptimizationStrategy.Balanced, "Balanced (BC1 opaque, BC7 with alpha)"),
-        new(OptimizationStrategy.MaximumQuality, "Best quality (BC7 always)"),
-        new(OptimizationStrategy.SmallestSize, "Smallest size (BC1 wherever it fits)"),
+        new(OptimizationStrategy.Balanced, S.StrategyBalanced),
+        new(OptimizationStrategy.MaximumQuality, S.StrategyQuality),
+        new(OptimizationStrategy.SmallestSize, S.StrategySmallest),
     ];
 
     public IReadOnlyList<QualityChoice> Qualities { get; } =
     [
-        new(EncodeQuality.Fast, "Fast (lowest quality)"),
-        new(EncodeQuality.Balanced, "Balanced"),
-        new(EncodeQuality.Best, "Best (slowest)"),
+        new(EncodeQuality.Fast, S.QualityFast),
+        new(EncodeQuality.Balanced, S.QualityBalanced),
+        new(EncodeQuality.Best, S.QualityBest),
     ];
 
     public IReadOnlyList<MipModeChoice> MipModes { get; } =
     [
-        new(MipMode.KeepChain, "Keep smaller levels"),
-        new(MipMode.SingleLevel, "Keep one level only"),
+        new(MipMode.KeepChain, S.MipKeepChain),
+        new(MipMode.SingleLevel, S.MipSingleLevel),
     ];
 
     public IReadOnlyList<BackendChoice> Backends { get; } =
     [
-        new(EncoderBackend.Auto, "Automatic"),
-        new(EncoderBackend.Compressonator, "Fast (Compressonator)"),
-        new(EncoderBackend.Managed, "Portable (BCnEncoder)"),
+        new(EncoderBackend.Auto, S.BackendAuto),
+        new(EncoderBackend.Compressonator, S.BackendFast),
+        new(EncoderBackend.Managed, S.BackendPortable),
     ];
 
     /// <summary>What Auto resolves to right now, shown so the choice is not opaque.</summary>
-    public string BackendStatus => $"Encoder: {TextureEncoder.BackendStatus}";
+    public string BackendStatus => S.EncoderStatus(TextureEncoder.BackendStatus);
 
     public IReadOnlyList<SizeCap> SizeCaps { get; } =
     [
-        new(0, "Keep original"),
-        new(4096, "4096 max"),
-        new(2048, "2048 max"),
-        new(1024, "1024 max"),
-        new(512, "512 max"),
+        new(0, S.KeepOriginalSize),
+        new(4096, S.SizeCapMax(4096)),
+        new(2048, S.SizeCapMax(2048)),
+        new(1024, S.SizeCapMax(1024)),
+        new(512, S.SizeCapMax(512)),
     ];
 
     /// <summary>
@@ -64,13 +65,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private static readonly StreamFloor[] AllStreamFloors =
     [
-        new(0, "Off"),
-        new(2048, "Keep 2048 resident"),
-        new(1024, "Keep 1024 resident"),
-        new(512, "Keep 512 resident (suggested)"),
-        new(256, "Keep 256 resident"),
-        new(128, "Keep 128 resident"),
-        new(64, "Keep 64 resident"),
+        new(0, S.StreamOff),
+        new(2048, S.StreamKeep(2048)),
+        new(1024, S.StreamKeep(1024)),
+        new(512, S.StreamKeepSuggested(512)),
+        new(256, S.StreamKeep(256)),
+        new(128, S.StreamKeep(128)),
+        new(64, S.StreamKeep(64)),
     ];
 
     /// <summary>
@@ -94,19 +95,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool CanChooseMipMode => !IsBusy && StreamFloor.Value == 0;
 
     public string MipModeHint =>
-        CanChooseMipMode
-            ? "What to do with a texture that carries a mip chain.\n"
-            + "Keep smaller levels: discard only the levels above the cap. The texture stays "
-            + "mipmapped, so it will not shimmer at distance.\n"
-            + "Keep one level only: throw the chain away and keep a single image. Smaller, but "
-            + "minified surfaces shimmer and sample less efficiently.\n"
-            + "Either way the pixels are the author's own: nothing is re-encoded."
-            : "Not used while Stream mips is on: a streamed texture keeps the chain that "
-            + "survives Max size, so there is nothing further to drop. Set Stream mips to "
-            + "Off to choose here.";
+        CanChooseMipMode ? S.MipModeHintActive : S.MipModeHintDisabled;
+
+    /// <summary>The open bundle, or a standing invitation to open one.</summary>
+    public string BundleLabel => BundlePath ?? S.NoBundleLoaded;
 
     [ObservableProperty] private string? _bundlePath;
-    [ObservableProperty] private string _status = "Open a bundle to begin.";
+    [ObservableProperty] private string _status = S.OpenABundleToBegin;
     [ObservableProperty] private bool _isBusy;
     [ObservableProperty] private double _progress;
     [ObservableProperty] private string _progressText = "";
@@ -118,19 +113,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// re-encodes, and on its own it costs video memory rather than saving it.
     /// </summary>
     [ObservableProperty] private bool _addMips;
-    [ObservableProperty] private BackendChoice _encoder = new(EncoderBackend.Auto, "Automatic");
+    [ObservableProperty] private BackendChoice _encoder = new(EncoderBackend.Auto, S.BackendAuto);
 
     /// <summary>
     /// Resizing is the only genuinely lossy option here, so it is off by default
     /// and every affected texture reports its measured cost before you commit.
     /// </summary>
-    [ObservableProperty] private SizeCap _sizeCap = new(0, "Keep original");
-    [ObservableProperty] private StreamFloor _streamFloor = new(0, "Off");
-    [ObservableProperty] private MipModeChoice _mipSelection = new(MipMode.KeepChain, "Keep smaller levels");
+    [ObservableProperty] private SizeCap _sizeCap = new(0, S.KeepOriginalSize);
+    [ObservableProperty] private StreamFloor _streamFloor = new(0, S.StreamOff);
+    [ObservableProperty] private MipModeChoice _mipSelection = new(MipMode.KeepChain, S.MipKeepChain);
     [ObservableProperty] private StrategyChoice _strategy =
-        new(OptimizationStrategy.Balanced, "Balanced (BC1 opaque, BC7 with alpha)");
+        new(OptimizationStrategy.Balanced, S.StrategyBalanced);
     [ObservableProperty] private QualityChoice _quality =
-        new(EncodeQuality.Balanced, "Balanced");
+        new(EncodeQuality.Balanced, S.QualityBalanced);
 
     /// <summary>
     /// Defaults to leaving four cores free. Saturating every core during a long
@@ -158,8 +153,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public string DuplicateSummary => DuplicateEntryCount == 0
         ? string.Empty
-        : $"{DuplicateEntryCount} entries repeat a payload another entry already has, "
-        + $"wasting {Format.Bytes(RedundantBytes)}. These are stored once and shared.";
+        : S.DuplicateSummary(DuplicateEntryCount, Format.Bytes(RedundantBytes));
 
     /// <summary>
     /// Deduplication alone can be a large win even when every texture is already
@@ -179,7 +173,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public string SavingSummary => CurrentSize == 0
         ? string.Empty
-        : $"{Format.Bytes(CurrentSize)} → {Format.Bytes(PredictedSize)}  (−{SavingFraction:P0})";
+        : S.SavingSummary(Format.Bytes(CurrentSize), Format.Bytes(PredictedSize),
+                          SavingFraction.ToString("P0"));
 
     public long CurrentFootprint { get; private set; }
     public long PredictedFootprint { get; private set; }
@@ -190,12 +185,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     public string FootprintSummary => CurrentFootprint == 0
         ? string.Empty
-        : $"GPU memory {Format.Bytes(CurrentFootprint)} → {Format.Bytes(PredictedFootprint)}";
+        : S.FootprintSummary(Format.Bytes(CurrentFootprint), Format.Bytes(PredictedFootprint));
 
     public async Task LoadAsync(string path)
     {
         IsBusy = true;
-        Status = $"Analysing {Path.GetFileName(path)}...";
+        Status = S.Analysing(Path.GetFileName(path));
         Textures.Clear();
         Skipped.Clear();
 
@@ -222,6 +217,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             _bundle = bundle;
             BundlePath = path;
+            OnPropertyChanged(nameof(BundleLabel));
             CurrentSize = plan.CurrentGpuSize;
 
             foreach (var item in plan.Textures)
@@ -239,19 +235,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // HasWork, not CanOptimize: IsBusy is still true here and would make
             // every freshly loaded bundle look like it had nothing to do.
             Status = !HasWork
-                ? "Nothing to do: this bundle is already optimised."
+                ? S.AlreadyOptimised
                 : (Textures.Count, DuplicateEntryCount) switch
                 {
-                    (0, _) => $"Every texture is already compressed, but {DuplicateEntryCount} "
-                            + "duplicate payloads can be shared.",
-                    (_, 0) => $"{Textures.Count} texture(s) can be shrunk, {Skipped.Count} skipped.",
-                    _ => $"{Textures.Count} texture(s) can be shrunk and {DuplicateEntryCount} "
-                       + $"duplicate payloads shared, {Skipped.Count} skipped.",
+                    (0, _) => S.OnlyDuplicates(DuplicateEntryCount),
+                    (_, 0) => S.CanShrink(Textures.Count, Skipped.Count),
+                    _ => S.CanShrinkAndShare(Textures.Count, DuplicateEntryCount, Skipped.Count),
                 };
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
         {
-            Status = $"Could not open: {ex.Message}";
+            Status = S.CouldNotOpen(ex.Message);
         }
         finally
         {
@@ -283,7 +277,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 var reporter = new Progress<ApplyProgress>(p =>
                 {
                     Progress = p.Total == 0 ? 0 : 100.0 * p.Completed / p.Total;
-                    ProgressText = $"{p.Stage}: {p.Detail}";
+                    ProgressText = S.Progress(p.Stage, p.Detail);
                 });
 
                 return BundleOptimizer.Apply(
@@ -301,11 +295,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 _bundle.Path, Path.Combine(backupDirectory, Path.GetFileName(_bundle.Path))));
 
             Status = report.Passed
-                ? $"Done: {Format.Bytes(result.OriginalGpuSize)} → {Format.Bytes(result.NewGpuSize)} "
-                + $"(saved {Format.Bytes(result.Saved)}) in {result.Elapsed.TotalSeconds:F1}s. "
-                + $"Verified; originals in {Path.GetFileName(backupDirectory)}/."
-                : $"Written, but verification found {report.Issues.Count} issue(s): "
-                + string.Join("; ", report.Issues.Take(3).Select(i => i.Detail));
+                ? S.Done(Format.Bytes(result.OriginalGpuSize), Format.Bytes(result.NewGpuSize),
+                         Format.Bytes(result.Saved), result.Elapsed.TotalSeconds.ToString("F1"),
+                         Path.GetFileName(backupDirectory))
+                : S.WrittenButIssues(report.Issues.Count,
+                                     string.Join("; ", report.Issues.Take(3).Select(i => i.Detail)));
 
             // The bundle on disk has changed, so the plan no longer describes it.
             Textures.Clear();
@@ -319,7 +313,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
         {
-            Status = $"Failed: {ex.Message}";
+            Status = S.Failed(ex.Message);
         }
         finally
         {

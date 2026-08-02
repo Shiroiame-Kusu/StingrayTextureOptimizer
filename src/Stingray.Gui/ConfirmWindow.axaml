@@ -4,15 +4,16 @@
 -->
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:Stingray.Gui.Localization"
         x:Class="Stingray.Gui.ConfirmWindow"
-        Title="Confirm" Width="480" SizeToContent="Height"
+        Title="{x:Static loc:S.ConfirmTitle}" Width="480" SizeToContent="Height"
         WindowStartupLocation="CenterOwner" CanResize="False">
   <StackPanel Margin="20" Spacing="14">
     <TextBlock Name="HeadingText" FontSize="16" FontWeight="SemiBold" TextWrapping="Wrap" />
     <TextBlock Name="BodyText" TextWrapping="Wrap" Opacity="0.85" />
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
-      <Button Content="Cancel" Click="OnCancel" MinWidth="90" />
-      <Button Content="Rewrite" Click="OnConfirm" MinWidth="90" Classes="accent" />
+      <Button Content="{x:Static loc:S.ConfirmCancel}" Click="OnCancel" MinWidth="90" />
+      <Button Content="{x:Static loc:S.ConfirmRewrite}" Click="OnConfirm" MinWidth="90" Classes="accent" />
     </StackPanel>
   </StackPanel>
 </Window>

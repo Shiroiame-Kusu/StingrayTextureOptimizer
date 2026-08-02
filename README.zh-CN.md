@@ -76,7 +76,7 @@
 **3. 看一眼，然后点 Optimize。** 表格里列出了每一张可以缩小的纹理以及它会变成什么样，
 右下角是总计。确认没问题就按 **Optimize**。
 
-![一个全是未压缩纹理的资源包的处理方案](docs/images/01-plan.png)
+![一个全是未压缩纹理的资源包的处理方案](docs/images/01-plan.zh.png)
 
 怎么看：每一行是一张纹理，**Size → New** 是它现在占多少、之后会占多少，**Content**
 是分析器在里面发现了什么。其中两张结果是纯色，于是从 2048² 折叠成 16×16 ——
@@ -96,7 +96,7 @@
 如果还想更进一步，唯一值得动的是 **Max size**。它会把过大的纹理减半，这也是这里唯一
 真正丢弃细节的选项。它默认关闭。
 
-![一个更大的、已经压缩过的 mod，加上 2048 上限，显示每张纹理实测的代价](docs/images/02-resize.png)
+![一个更大的、已经压缩过的 mod，加上 2048 上限，显示每张纹理实测的代价](docs/images/02-resize.zh.png)
 
 把它调到 `2048 max`，**Resize cost** 一列就会填上每张纹理减半实际付出的代价 ——
 这是在它自己的像素上测出来的。写着 *nothing visible lost* 的行是白赚的。写着
@@ -235,6 +235,27 @@ dotnet publish src/Stingray.Gui -c Release -r linux-x64 -o out/gui
 
 不做第一步工具照样能用，只是走较慢的托管编码器 —— GUI 的页脚和 `analyze` 的输出
 都会说明当前用的是哪一个。
+
+## 界面语言
+
+图形界面有**英文和简体中文**两种，启动时会读取系统语言自动选择 —— 在 Linux 和 macOS 上
+读 `LC_ALL`、`LC_MESSAGES`、`LANG` 或 `LANGUAGE`，在 Windows 上读用户的界面语言。
+只要是中文就用中文，其他一律用英文。
+
+想手动指定，设置 `STINGRAY_LANG`：
+
+```sh
+STINGRAY_LANG=zh stingray-tex-gui     # 强制中文
+STINGRAY_LANG=en stingray-tex-gui     # 强制英文
+```
+
+繁体中文环境（`zh_TW`、`zh_HK`）同样会得到简体中文界面 —— 理由是简体总比英文更好读。
+
+命令行不管系统语言如何都保持英文：它的输出是有文档的、会被 diff、也会被脚本解析，
+如果 `analyze` 的输出随语言变化就全乱了。
+
+程序本身不附带中日韩字体，用的是系统自带的 —— Windows、macOS 以及任何桌面版 Linux
+都已经有了。
 
 ## 使用
 
@@ -387,7 +408,7 @@ Compressonator 的 `balanced` 比 BCnEncoder 的 `best` 还高 3 dB。就算力�
 | `--add-mips` | 229.7 MiB |
 | `--add-mips --stream 256` | **123.5 MiB** |
 
-![同一个资源包，生成了 mip 链并在 256 层做流式](docs/images/03-stream.png)
+![同一个资源包，生成了 mip 链并在 256 层做流式](docs/images/03-stream.zh.png)
 
 这和第一张截图是同一个资源包，只改了一个下拉框。选中 *Keep 256 resident* 自动勾上了
 *Generate mipmaps* —— 没有链的纹理无从流式 —— 并把 *Mip levels* 置灰，因为流式纹理
