@@ -99,12 +99,20 @@ A mod that ships variants keeps them in folders under itself, so *Long boi* and
 names in a flat list. Each line carries what it costs; a mod with one bundle is
 shown as one line rather than a folder you have to open.
 
-Click a bundle to see its plan, as if you had opened it directly. **Or tick
-several and press Optimize to do them all**, one after another with the settings
-at the top — ticking a mod ticks everything under it. There is no plan to review
-first, because several bundles have no single plan between them; what stands in
-for it is that each one is still backed up before it is written and verified
-after, and anything that would not shrink is reported and left alone.
+Click a bundle to see its plan, as if you had opened it directly.
+
+**Or tick several — ticking a mod ticks everything under it — and the button
+becomes Analyse.** Press it and every ticked bundle is analysed, with all of
+their textures shown together in one grid and a **Mod** column saying which
+bundle each row came from. The totals at the bottom right are for the whole
+selection. Only then does the button become Optimize, so a batch gets looked at
+before it is written exactly as a single bundle does, and you can still untick
+individual textures across any of them.
+
+Changing a setting retires the analysis and the button offers a fresh one, since
+the plans describe the settings they were built under. Writing then backs up and
+verifies each bundle in turn, and anything that would not shrink is reported and
+left alone.
 
 Any `backup` folder is skipped, including the ones this tool writes — otherwise
 every mod you had already optimised would appear twice, once as it is and once

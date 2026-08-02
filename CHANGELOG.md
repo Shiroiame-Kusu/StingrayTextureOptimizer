@@ -28,11 +28,16 @@ Figures quoted here are measured on real bundles, not estimated.
     belong to. A flat list could not say that "Long boi" and "Shorty" are two
     options of one mod. A mod holding a single bundle is shown as one line
     rather than a folder to open.
-  - **Several bundles can be optimised together.** Tick them — ticking a mod
-    ticks its variants — and Optimize runs them in turn with the settings on
-    screen. Each is backed up and verified exactly as one at a time is, and
-    anything that would not shrink, or that already holds a backup from a
-    previous run, is counted and left alone rather than forced.
+  - **Several bundles can be analysed and optimised together.** Tick them —
+    ticking a mod ticks its variants — and the button becomes Analyse. Every
+    ticked bundle is then analysed into one grid, with a Mod column saying which
+    bundle each row came from and the totals covering the whole selection; only
+    then does the button become Optimize. So a batch is reviewed before it is
+    written, exactly as a single bundle is, and individual textures can still be
+    unticked across any of them. Changing a setting retires the analysis, since
+    the plans describe the settings they were built under. Writing backs up and
+    verifies each bundle in turn, and anything that would not shrink is counted
+    and left alone rather than forced.
 
 ## [0.1.2] — 2026-08-02
 

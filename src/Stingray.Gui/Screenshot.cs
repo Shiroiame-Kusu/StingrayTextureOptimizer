@@ -21,6 +21,7 @@ internal static class Screenshot
     public static string? OutputPath { get; private set; }
     public static string? BundlePath { get; private set; }
     public static string? ScanPath { get; private set; }
+    public static int AnalyseCount { get; private set; }
     public static int SizeCap { get; private set; }
     public static int StreamFloor { get; private set; }
     public static bool Requested => OutputPath is not null;
@@ -41,6 +42,9 @@ internal static class Screenshot
                     break;
                 case "--scan" when i + 1 < args.Length:
                     ScanPath = args[++i];
+                    break;
+                case "--analyse" when i + 1 < args.Length:
+                    AnalyseCount = int.TryParse(args[++i], out var count) ? count : 0;
                     break;
                 case "--cap" when i + 1 < args.Length:
                     SizeCap = int.TryParse(args[++i], out var cap) ? cap : 0;
@@ -84,6 +88,12 @@ internal static class Screenshot
                 if (mod.Children.Count == 0) continue;
                 mod.IsExpanded = true;
                 break;
+            }
+
+            if (AnalyseCount > 0)
+            {
+                foreach (var mod in viewModel.Mods.Take(AnalyseCount)) mod.IsChecked = true;
+                await viewModel.AnalyseManyAsync(viewModel.CheckedBundles);
             }
         }
 

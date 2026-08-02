@@ -33,17 +33,33 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public bool HasCheckedBundles => CheckedBundles.Count > 0;
 
+    /// <summary>
+    /// The plans behind an analysed batch, kept so Optimize applies exactly what
+    /// was reviewed rather than re-deciding on its own.
+    /// </summary>
+    private readonly List<(Bundle Bundle, OptimizationPlan Plan)> _batch = [];
+
+    private bool HasBatch => _batch.Count > 0;
+
+    /// <summary>Whether a reviewed batch is waiting to be written.</summary>
+    public bool HasAnalysedBatch => HasBatch;
+
     public string SelectionSummary => CheckedBundles is { Count: > 0 } checkedBundles
         ? S.SelectedForOptimising(checkedBundles.Count,
                                   Format.Bytes(checkedBundles.Sum(b => b.GpuSize)))
         : string.Empty;
 
     /// <summary>
-    /// Optimising several at once cannot show a plan first, so the button says
-    /// how many it is about to touch rather than pretending otherwise.
+    /// Ticking bundles does not analyse them, so the button offers that first and
+    /// only becomes Optimize once there is a plan on screen to have looked at.
     /// </summary>
     public string OptimizeLabel =>
-        CheckedBundles.Count > 1 ? S.OptimizeSelected(CheckedBundles.Count) : S.Optimize;
+        HasBatch ? S.Optimize
+        : CheckedBundles.Count > 0 ? S.AnalyseSelected(CheckedBundles.Count)
+        : S.Optimize;
+
+    /// <summary>Whether pressing the button would analyse rather than write.</summary>
+    public bool WouldAnalyse => !HasBatch && CheckedBundles.Count > 0;
 
     /// <summary>Ticking anything changes what Optimize would do, so it has to know.</summary>
     public void RefreshSelection()
@@ -52,6 +68,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HasCheckedBundles));
         OnPropertyChanged(nameof(SelectionSummary));
         OnPropertyChanged(nameof(OptimizeLabel));
+        OnPropertyChanged(nameof(WouldAnalyse));
         OnPropertyChanged(nameof(CanOptimize));
     }
 
@@ -263,10 +280,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     /// <summary>Whether repacking would shrink anything, regardless of busy state.</summary>
     public bool HasWork =>
-        _plan is not null
+        (_plan is not null || HasBatch)
         && (PredictedSize < CurrentSize || PredictedFootprint < CurrentFootprint);
 
-    public bool CanOptimize => !IsBusy && (HasWork || CheckedBundles.Count > 1);
+    /// <summary>
+    /// Enabled to analyse a ticked batch, or to write one that turned out to
+    /// have something to save. An analysed batch with nothing to do leaves it
+    /// disabled rather than offering a press that would rewrite nothing.
+    /// </summary>
+    public bool CanOptimize => !IsBusy && (HasWork || WouldAnalyse);
 
     public string SavingSummary => CurrentSize == 0
         ? string.Empty
@@ -355,36 +377,22 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private OptimizationPlan? _plan;
 
     /// <summary>
-    /// Optimises every ticked bundle in turn, with the settings on screen.
+    /// Analyses every ticked bundle and shows all of their textures together, so
+    /// a batch is reviewed before it is written rather than taken on trust.
     /// </summary>
-    /// <remarks>
-    /// There is no plan to review first, because several bundles have no single
-    /// plan between them. What keeps that honest is that every bundle is backed
-    /// up before it is written and verified after, exactly as one at a time is —
-    /// and anything that would not shrink, or that already holds a backup from a
-    /// previous run, is left alone and counted rather than forced.
-    /// </remarks>
-    public async Task OptimizeManyAsync(IReadOnlyList<ModNodeViewModel> targets)
+    public async Task AnalyseManyAsync(IReadOnlyList<ModNodeViewModel> targets)
     {
         IsBusy = true;
         Progress = 0;
+        ClearBatch();
+        Textures.Clear();
+        Skipped.Clear();
 
-        var optimised = 0;
-        var skipped = 0;
-        var failed = 0;
-        long saved = 0;
-
-        var settings = new EncodeOptions
-        {
-            Quality = Quality.Value,
-            ThreadCount = ThreadCount,
-            Backend = Encoder.Value,
-        };
         var strategy = Strategy.Value;
         var collapse = CollapseSolidColours;
         var dedup = Deduplicate;
         var cap = SizeCap.Value;
-        var mips = MipSelection.Value;
+        var mipMode = MipSelection.Value;
         var floor = StreamFloor.Value;
         var addMips = AddMips;
 
@@ -394,37 +402,119 @@ public sealed partial class MainWindowViewModel : ObservableObject
             {
                 var target = targets[i];
                 Progress = 100.0 * i / targets.Count;
-                ProgressText = S.BatchProgress(i + 1, targets.Count, target.Name);
+                ProgressText = S.AnalysingMany(i + 1, targets.Count, target.Name);
 
-                var outcome = await Task.Run(() =>
+                var analysed = await Task.Run<(Bundle Bundle, OptimizationPlan Plan)?>(() =>
                 {
                     var bundle = Bundle.Load(target.Bundle!.Path);
-                    if (!bundle.HasGpuResources) return (Result: 0, Saved: 0L);
+                    if (!bundle.HasGpuResources) return null;
 
                     using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
                     var plan = OptimizationPlan.Build(bundle, gpu, strategy, collapse,
-                                                      maxDimension: cap, mipMode: mips,
+                                                      maxDimension: cap, mipMode: mipMode,
                                                       streamFloor: floor, generateMips: addMips);
                     plan.Deduplicate = dedup;
+                    return (Bundle: bundle, Plan: plan);
+                });
 
-                    // Same test the single-bundle path uses: no saving, no rewrite.
+                if (analysed is not { } entry) continue;
+
+                _batch.Add(entry);
+                foreach (var item in entry.Plan.Textures)
+                    Textures.Add(new TextureItemViewModel(item, RecalculateTotals, target.Name));
+                foreach (var skip in entry.Plan.Skipped)
+                    Skipped.Add(skip);
+            }
+
+            CurrentSize = _batch.Sum(b => b.Plan.CurrentGpuSize);
+            CurrentFootprint = _batch.Sum(b => b.Plan.CurrentGpuFootprint);
+            DuplicateEntryCount = _batch.Sum(b => b.Plan.DuplicateEntryCount);
+            RedundantBytes = _batch.Sum(b => b.Plan.RedundantBytes);
+
+            Status = HasWork
+                ? S.AnalysedMany(_batch.Count, Textures.Count, Skipped.Count)
+                : S.AnalysedNothing(_batch.Count);
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException
+                                      or NotSupportedException or UnauthorizedAccessException)
+        {
+            ClearBatch();
+            Status = S.CouldNotOpen(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+            Progress = 0;
+            ProgressText = "";
+            BundlePath = null;
+            OnPropertyChanged(nameof(BundleLabel));
+            RecalculateTotals();
+            RefreshSelection();
+        }
+    }
+
+    /// <summary>
+    /// Writes the batch that was analysed — the same plans that are on screen,
+    /// with whatever was unticked in the grid left out, each backed up and
+    /// verified exactly as a single bundle is.
+    /// </summary>
+    public async Task OptimizeBatchAsync()
+    {
+        IsBusy = true;
+        Progress = 0;
+
+        var settings = new EncodeOptions
+        {
+            Quality = Quality.Value,
+            ThreadCount = ThreadCount,
+            Backend = Encoder.Value,
+        };
+
+        var optimised = 0;
+        var skipped = 0;
+        var failed = 0;
+        long saved = 0;
+        var work = _batch.ToList();
+
+        try
+        {
+            for (var i = 0; i < work.Count; i++)
+            {
+                var (bundle, plan) = work[i];
+                Progress = 100.0 * i / work.Count;
+                ProgressText = S.BatchProgress(i + 1, work.Count, Path.GetFileName(bundle.Path));
+
+                var outcome = await Task.Run(() =>
+                {
                     if (plan.PredictedGpuSize >= plan.CurrentGpuSize
                         && plan.PredictedGpuFootprint >= plan.CurrentGpuFootprint)
                         return (Result: 0, Saved: 0L);
 
-                    var backupDirectory = Path.Combine(
-                        Path.GetDirectoryName(bundle.Path) ?? ".", "backup");
-                    BundleOptimizer.CreateBackup(bundle, backupDirectory);
+                    try
+                    {
+                        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+                        var backupDirectory = Path.Combine(
+                            Path.GetDirectoryName(bundle.Path) ?? ".", "backup");
+                        BundleOptimizer.CreateBackup(bundle, backupDirectory);
 
-                    var result = BundleOptimizer.Apply(
-                        plan, gpu, bundle.Path, bundle.GpuResourcePath, settings,
-                        deduplicate: dedup, outputStreamPath: bundle.StreamPath);
+                        var result = BundleOptimizer.Apply(
+                            plan, gpu, bundle.Path, bundle.GpuResourcePath, settings,
+                            deduplicate: plan.Deduplicate, outputStreamPath: bundle.StreamPath);
 
-                    var report = BundleVerifier.Verify(
-                        bundle.Path,
-                        Path.Combine(backupDirectory, Path.GetFileName(bundle.Path)));
+                        var report = BundleVerifier.Verify(
+                            bundle.Path,
+                            Path.Combine(backupDirectory, Path.GetFileName(bundle.Path)));
 
-                    return (Result: report.Passed ? 1 : -1, result.Saved);
+                        return (Result: report.Passed ? 1 : -1, result.Saved);
+                    }
+                    catch (Exception e) when (e is IOException or InvalidDataException
+                                                 or NotSupportedException
+                                                 or UnauthorizedAccessException)
+                    {
+                        // A backup already there is the usual reason, and it must
+                        // not stop the bundles after this one.
+                        return (Result: -1, Saved: 0L);
+                    }
                 });
 
                 switch (outcome.Result)
@@ -433,17 +523,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     case 0: skipped++; break;
                     default: failed++; break;
                 }
-
-                target.IsChecked = false;
             }
-        }
-        catch (Exception ex) when (ex is IOException or InvalidDataException
-                                      or NotSupportedException or UnauthorizedAccessException)
-        {
-            // A backup that already exists lands here, which is the usual reason
-            // a run stops early. What finished still finished.
-            failed++;
-            Status = S.Failed(ex.Message);
+
+            Status = S.BatchDone(optimised, skipped, failed, Format.Bytes(saved));
         }
         finally
         {
@@ -451,15 +533,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Progress = 0;
             ProgressText = "";
 
-            if (Status.Length == 0 || failed == 0 || optimised > 0)
-                Status = S.BatchDone(optimised, skipped, failed, Format.Bytes(saved));
-
+            ClearBatch();
             Textures.Clear();
             Skipped.Clear();
-            _plan = null;
-            _bundle = null;
-            BundlePath = null;
-            OnPropertyChanged(nameof(BundleLabel));
+            foreach (var bundle in AllBundles) bundle.IsChecked = false;
             CurrentSize = 0;
             CurrentFootprint = 0;
             DuplicateEntryCount = 0;
@@ -467,6 +544,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
             RecalculateTotals();
             RefreshSelection();
         }
+    }
+
+    /// <summary>
+    /// Drops an analysed batch. Anything that would change what a plan says —
+    /// a setting, or which bundles are ticked — invalidates it, and the button
+    /// goes back to offering an analysis rather than a write.
+    /// </summary>
+    private void ClearBatch()
+    {
+        if (_batch.Count == 0) return;
+        _batch.Clear();
     }
 
     [RelayCommand]
@@ -544,12 +632,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     public void RecalculateTotals()
     {
-        PredictedSize = _plan?.PredictedGpuSize ?? CurrentSize;
+        // A batch has no single plan; its totals are the sum of the ones behind it.
+        PredictedSize = HasBatch
+            ? _batch.Sum(b => b.Plan.PredictedGpuSize)
+            : _plan?.PredictedGpuSize ?? CurrentSize;
         OnPropertyChanged(nameof(PredictedSize));
         OnPropertyChanged(nameof(Saving));
         OnPropertyChanged(nameof(SavingFraction));
         OnPropertyChanged(nameof(SavingSummary));
-        PredictedFootprint = _plan?.PredictedGpuFootprint ?? CurrentFootprint;
+        PredictedFootprint = HasBatch
+            ? _batch.Sum(b => b.Plan.PredictedGpuFootprint)
+            : _plan?.PredictedGpuFootprint ?? CurrentFootprint;
         OnPropertyChanged(nameof(FootprintSummary));
         OnPropertyChanged(nameof(HasPlan));
         OnPropertyChanged(nameof(HasSkipped));
@@ -596,6 +689,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
     partial void OnDeduplicateChanged(bool value)
     {
         if (_plan is not null) _plan.Deduplicate = value;
+        foreach (var (_, plan) in _batch) plan.Deduplicate = value;
         RecalculateTotals();
     }
 
@@ -675,6 +769,24 @@ public sealed partial class MainWindowViewModel : ObservableObject
     private void Replan()
     {
         if (_linking) return;
+
+        // An analysed batch describes the settings it was analysed under, so a
+        // change to those settings retires it and the button offers a fresh
+        // analysis rather than writing something nobody looked at.
+        if (HasBatch && !IsBusy)
+        {
+            ClearBatch();
+            Textures.Clear();
+            Skipped.Clear();
+            CurrentSize = 0;
+            CurrentFootprint = 0;
+            DuplicateEntryCount = 0;
+            RedundantBytes = 0;
+            RecalculateTotals();
+            RefreshSelection();
+            return;
+        }
+
         if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
     }
 }

@@ -165,6 +165,35 @@ public class FolderScanTests : IDisposable
     }
 
     /// <summary>
+    /// Ticking bundles does not analyse them, so the button offers that first —
+    /// a batch gets reviewed before it is written, like a single bundle does.
+    /// </summary>
+    [Fact]
+    public async Task TickedBundlesAreAnalysedBeforeTheyCanBeWritten()
+    {
+        AddMod(folders: ["R-36", "Shorty"]);
+        AddMod(folders: ["R-36", "Long boi"]);
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        vm.Mods.Single(m => m.Name == "R-36").IsChecked = true;
+
+        Assert.True(vm.WouldAnalyse);
+        Assert.False(vm.HasAnalysedBatch);
+        Assert.Empty(vm.Textures);
+
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        // Both bundles' textures are on screen together, each attributed.
+        Assert.True(vm.HasAnalysedBatch);
+        Assert.False(vm.WouldAnalyse);
+        Assert.NotEmpty(vm.Textures);
+        Assert.Equal(new[] { "Long boi", "Shorty" },
+                     vm.Textures.Select(t => t.ModName).Distinct().Order());
+        Assert.True(vm.PredictedSize < vm.CurrentSize);
+    }
+
+    /// <summary>
     /// Several at once, each backed up and verified. The bundles here are all
     /// uncompressed RGBA8, so every one of them has something to save.
     /// </summary>
@@ -184,7 +213,8 @@ public class FolderScanTests : IDisposable
         foreach (var node in vm.Mods) node.IsChecked = true;
         Assert.Equal(3, vm.CheckedBundles.Count);
 
-        await vm.OptimizeManyAsync(vm.CheckedBundles);
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+        await vm.OptimizeBatchAsync();
 
         foreach (var (path, originalSize) in before)
         {

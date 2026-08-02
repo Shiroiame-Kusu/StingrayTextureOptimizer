@@ -56,9 +56,17 @@ public partial class MainWindow : Window
 
     private async void OnOptimizeClicked(object? sender, RoutedEventArgs e)
     {
-        if (_viewModel.CheckedBundles.Count > 1)
+        // Ticked bundles are analysed first: a batch gets the same look before
+        // it is written that a single bundle does.
+        if (_viewModel.WouldAnalyse)
         {
-            await OptimizeManyAsync();
+            await _viewModel.AnalyseManyAsync(_viewModel.CheckedBundles);
+            return;
+        }
+
+        if (_viewModel.HasAnalysedBatch)
+        {
+            await OptimizeBatchAsync();
             return;
         }
 
@@ -69,15 +77,15 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Several bundles at once. Deliberately a different dialog: there is no plan
-    /// on screen for these, so the confirmation has to say what will happen.
+    /// Writing a batch that has already been analysed and is on screen. Still its
+    /// own dialog: several bundles are being rewritten, not one.
     /// </summary>
-    private async Task OptimizeManyAsync()
+    private async Task OptimizeBatchAsync()
     {
-        var targets = _viewModel.CheckedBundles;
-        var confirm = new ConfirmWindow(S.ConfirmBatchHeading(targets.Count), S.ConfirmBatchBody);
+        var confirm = new ConfirmWindow(
+            S.ConfirmBatchHeading(_viewModel.Textures.Count), S.ConfirmBatchBody);
 
         if (await confirm.ShowDialog<bool>(this))
-            await _viewModel.OptimizeManyAsync(targets);
+            await _viewModel.OptimizeBatchAsync();
     }
 }

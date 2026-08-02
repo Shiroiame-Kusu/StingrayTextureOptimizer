@@ -20,13 +20,20 @@ public sealed partial class TextureItemViewModel : ObservableObject
 {
     private readonly Action _onChanged;
 
-    public TextureItemViewModel(TexturePlanItem item, Action onChanged)
+    public TextureItemViewModel(TexturePlanItem item, Action onChanged, string modName = "")
     {
         Item = item;
         _onChanged = onChanged;
         _include = item.Include;
         _targetFormat = item.TargetFormat;
+        ModName = modName;
     }
+
+    /// <summary>
+    /// Which bundle this row came from. Only worth anything when several were
+    /// analysed at once, and then it is the only thing that says which is which.
+    /// </summary>
+    public string ModName { get; }
 
     public TexturePlanItem Item { get; }
 

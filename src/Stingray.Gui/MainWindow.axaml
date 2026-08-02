@@ -189,6 +189,10 @@
         <DataGrid.Columns>
           <DataGridCheckBoxColumn Header="" Width="40"
                                   Binding="{Binding Include, x:DataType=vm:TextureItemViewModel}" />
+          <!-- Which bundle a row came from. Blank for a single bundle, and the
+               only thing that tells rows apart once several are analysed at once. -->
+          <DataGridTextColumn Header="{x:Static loc:S.ColumnMod}" IsReadOnly="True" Width="150"
+                              Binding="{Binding ModName, x:DataType=vm:TextureItemViewModel}" />
           <DataGridTextColumn Header="{x:Static loc:S.ColumnTexture}" IsReadOnly="True" Width="148"
                               Binding="{Binding Name, x:DataType=vm:TextureItemViewModel}" />
           <DataGridTextColumn Header="{x:Static loc:S.ColumnDimensions}" IsReadOnly="True" Width="200"

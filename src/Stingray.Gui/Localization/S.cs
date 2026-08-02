@@ -51,6 +51,24 @@ public static class S
     public static string OptimizeSelected(int bundles) =>
         T($"Optimize {bundles}", $"优化 {bundles} 个");
 
+    public static string AnalyseSelected(int bundles) =>
+        T($"Analyse {bundles}", $"分析 {bundles} 个");
+
+    public static string AnalysingMany(int done, int total, string name) =>
+        T($"{done}/{total}  {name}", $"{done}/{total}  {name}");
+
+    public static string AnalysedMany(int bundles, int textures, int skipped) => T(
+        $"{bundles} bundle(s) analysed: {textures} texture(s) can be shrunk, {skipped} skipped. "
+      + "Review below, then Optimize.",
+        $"已分析 {bundles} 个资源包：{textures} 张纹理可以缩小，{skipped} 张跳过。"
+      + "在下面确认后再点优化。");
+
+    public static string AnalysedNothing(int bundles) => T(
+        $"{bundles} bundle(s) analysed: nothing to do, they are already optimised.",
+        $"已分析 {bundles} 个资源包：无事可做，它们已经优化过了。");
+
+    public static string ColumnMod => T("Mod", "所属 Mod");
+
     public static string ConfirmBatchHeading(int bundles) =>
         T($"Optimize {bundles} bundles?", $"要优化这 {bundles} 个资源包吗？");
 
