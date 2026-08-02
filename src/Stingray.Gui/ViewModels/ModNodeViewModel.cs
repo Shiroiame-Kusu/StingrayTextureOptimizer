@@ -83,6 +83,15 @@ public sealed partial class ModNodeViewModel : ObservableObject
 
     partial void OnIsCheckedChanged(bool? value)
     {
+        // Half-ticked means "some of the things under this", and a bundle has
+        // none. One left there would look chosen and not be counted as chosen,
+        // so there is no such state for a bundle to be in.
+        if (value is null && Children.Count == 0)
+        {
+            IsChecked = false;
+            return;
+        }
+
         // A tick on a folder is a tick on everything under it, which is what
         // makes selecting a whole mod one click rather than one per option.
         if (!_updatingFromChild && value is { } state)
@@ -108,6 +117,34 @@ public sealed partial class ModNodeViewModel : ObservableObject
             ? null
             : checkedCount == Children.Count;
         _updatingFromChild = false;
+    }
+
+    /// <summary>
+    /// Re-reads this bundle's sizes from disk, and the totals of every folder
+    /// above it.
+    /// </summary>
+    /// <remarks>
+    /// The sizes come from the scan, so after a bundle is rewritten the panel
+    /// still quotes what it used to cost — the one number the whole exercise
+    /// was about, left saying the thing that is no longer true.
+    /// </remarks>
+    public void Refresh()
+    {
+        if (Bundle is not { } bundle) return;
+
+        var gpu = new FileInfo(bundle.Path + ".gpu_resources");
+        var stream = new FileInfo(bundle.Path + ".stream");
+        Bundle = bundle with
+        {
+            GpuSize = gpu.Exists ? gpu.Length : 0,
+            StreamSize = stream.Exists ? stream.Length : 0,
+        };
+
+        for (var node = this; node is not null; node = node.Parent)
+        {
+            node.OnPropertyChanged(nameof(GpuSize));
+            node.OnPropertyChanged(nameof(Detail));
+        }
     }
 
     /// <summary>Builds the folder tree the scan implies.</summary>

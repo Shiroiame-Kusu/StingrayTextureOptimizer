@@ -79,13 +79,15 @@ public static class S
         T($"Optimize {bundles} bundles?", $"要优化这 {bundles} 个资源包吗？");
 
     public static string ConfirmBatchBody => T(
-        "Each one is analysed with the settings above, backed up to a 'backup' folder beside it, "
-      + "rewritten and then verified — the same as optimising one at a time. There is no plan to "
-      + "review first: with several bundles there is no single plan to show. Anything already "
+        "The plan above is written as it stands. Each bundle is backed up to a 'backup' folder beside "
+      + "it, rewritten and then verified — the same as optimising one at a time. Anything already "
       + "optimised, or holding a backup from a previous run, is reported and left alone.",
-        "每一个都会按上面的设置分析、备份到它旁边的 backup 文件夹、重写，然后校验 —— "
-      + "和一个个处理完全一样。这里没有可供先审阅的方案：多个资源包本来就没有单一的方案可看。"
-      + "已经优化过的、或者已经存在上一次备份的，会被报告并跳过。");
+        "上面的方案会照原样写入。每个资源包都会备份到它旁边的 backup 文件夹、重写，然后校验 —— "
+      + "和一个个处理完全一样。已经优化过的、或者已经存在上一次备份的，会被报告并跳过。");
+
+    public static string AnalysisRetired => T(
+        "Settings or selection changed, so that analysis no longer applies. Press Analyse again.",
+        "设置或所选内容已更改，之前的分析不再适用。请重新点击分析。");
 
     public static string BatchProgress(int done, int total, string name) =>
         T($"{done}/{total}  {name}", $"{done}/{total}  {name}");

@@ -39,7 +39,23 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private readonly List<(Bundle Bundle, OptimizationPlan Plan)> _batch = [];
 
+    /// <summary>
+    /// The bundles that analysis was asked for, whether or not each could be
+    /// read. What the ticks are compared against to notice that the plans on
+    /// screen have stopped describing what is chosen.
+    /// </summary>
+    private readonly HashSet<string> _analysed = new(StringComparer.Ordinal);
+
     private bool HasBatch => _batch.Count > 0;
+
+    /// <summary>How many bundles the analysis on screen covers.</summary>
+    public int AnalysedBundleCount => _batch.Count;
+
+    /// <summary>Whether what is ticked is still what was analysed.</summary>
+    private bool TicksMatchBatch =>
+        CheckedBundles is var ticked
+        && ticked.Count == _analysed.Count
+        && ticked.All(b => _analysed.Contains(b.Bundle!.Path));
 
     /// <summary>
     /// Textures in whatever has been analysed that already carry a mip chain, or
@@ -84,6 +100,12 @@ public sealed partial class MainWindowViewModel : ObservableObject
     /// <summary>Ticking anything changes what Optimize would do, so it has to know.</summary>
     public void RefreshSelection()
     {
+        // An analysis describes the bundles it was run over. Once the ticks say
+        // something else it describes nothing that is chosen, and leaving it up
+        // would show one set of bundles in the grid while the button wrote
+        // another — which is exactly what pressing it would have done.
+        if (HasBatch && !IsBusy && !TicksMatchBatch) RetireBatch();
+
         OnPropertyChanged(nameof(CheckedBundles));
         OnPropertyChanged(nameof(HasCheckedBundles));
         OnPropertyChanged(nameof(SelectionSummary));
@@ -101,6 +123,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedModChanged(ModNodeViewModel? value)
     {
         if (value is null || !value.IsBundle || IsBusy) return;
+
+        // Opening one bundle replaces the grid, so an analysed batch cannot
+        // survive it: its totals would be summed against this bundle's, and the
+        // button would still write the batch while the screen showed this.
+        RetireBatch();
+        RefreshSelection();
+
         foreach (var bundle in AllBundles) bundle.IsOpen = ReferenceEquals(bundle, value);
         _ = LoadAsync(value.Bundle!.Path);
     }
@@ -112,6 +141,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public async Task ScanAsync(string folder)
     {
         IsBusy = true;
+
+        // Before the status is set, not after: retiring writes one of its own,
+        // and the scan's is the one worth reading.
+        RetireBatch();
         Status = S.Scanning(folder);
         Mods.Clear();
         OnPropertyChanged(nameof(HasMods));
@@ -409,6 +442,17 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Textures.Clear();
         Skipped.Clear();
 
+        // A single bundle may have been open before this; its plan must not be
+        // left behind for the totals or the button to fall back on.
+        _plan = null;
+        _bundle = null;
+
+        // Every bundle asked for, including any that turns out to be unreadable
+        // below — otherwise one that could not be opened would leave the ticks
+        // permanently disagreeing with the batch, retiring it immediately.
+        foreach (var target in targets)
+            if (target.Bundle is { } discovered) _analysed.Add(discovered.Path);
+
         var strategy = Strategy.Value;
         var collapse = CollapseSolidColours;
         var dedup = Deduplicate;
@@ -554,6 +598,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             Progress = 0;
             ProgressText = "";
 
+            // The panel quotes what the scan measured, so without this it goes
+            // on quoting what these bundles used to cost — the one figure the
+            // whole exercise was about.
+            var written = work.Select(w => w.Bundle.Path).ToHashSet(StringComparer.Ordinal);
+            foreach (var node in AllBundles)
+                if (written.Contains(node.Bundle!.Path)) node.Refresh();
+
             ClearBatch();
             Textures.Clear();
             Skipped.Clear();
@@ -567,15 +618,34 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    /// <summary>
-    /// Drops an analysed batch. Anything that would change what a plan says —
-    /// a setting, or which bundles are ticked — invalidates it, and the button
-    /// goes back to offering an analysis rather than a write.
-    /// </summary>
+    /// <summary>Drops an analysed batch and what it was built from.</summary>
     private void ClearBatch()
     {
-        if (_batch.Count == 0) return;
         _batch.Clear();
+        _analysed.Clear();
+    }
+
+    /// <summary>
+    /// Takes an analysed batch off the screen as well as out of memory.
+    /// Anything that changes what a plan would say — a setting, or which
+    /// bundles are ticked — invalidates it, and everything it put on screen
+    /// goes with it: the grid, the totals and the sentence describing it all
+    /// belong to bundles that are no longer the ones in question. The button
+    /// goes back to offering an analysis rather than a write.
+    /// </summary>
+    private void RetireBatch()
+    {
+        if (!HasBatch) return;
+
+        ClearBatch();
+        Textures.Clear();
+        Skipped.Clear();
+        CurrentSize = 0;
+        CurrentFootprint = 0;
+        DuplicateEntryCount = 0;
+        RedundantBytes = 0;
+        Status = S.AnalysisRetired;
+        RecalculateTotals();
     }
 
     [RelayCommand]
@@ -796,14 +866,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // analysis rather than writing something nobody looked at.
         if (HasBatch && !IsBusy)
         {
-            ClearBatch();
-            Textures.Clear();
-            Skipped.Clear();
-            CurrentSize = 0;
-            CurrentFootprint = 0;
-            DuplicateEntryCount = 0;
-            RedundantBytes = 0;
-            RecalculateTotals();
+            RetireBatch();
             RefreshSelection();
             return;
         }

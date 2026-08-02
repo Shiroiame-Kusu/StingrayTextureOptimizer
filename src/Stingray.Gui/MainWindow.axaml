@@ -156,7 +156,14 @@
           <TreeView.ItemTemplate>
             <TreeDataTemplate x:DataType="vm:ModNodeViewModel" ItemsSource="{Binding Children}">
               <Grid ColumnDefinitions="Auto,*" Margin="0,2">
-                <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}" IsThreeState="True"
+                <!-- Not IsThreeState: that puts the half-ticked state into the
+                     click cycle, so a click on a ticked mod lands there instead
+                     of clearing it — its options stay ticked, the mod looks
+                     chosen, and nothing under it counts as chosen. Half-ticked
+                     is something a folder is told it is by its children, never
+                     something a click can ask for. The indeterminate mark shows
+                     either way; only the cycle changes. -->
+                <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}"
                           VerticalAlignment="Center" Margin="0,0,6,0" />
                 <!-- Bounded explicitly: the tree measures its rows with no width
                      limit, so without this a long name neither wraps nor gives

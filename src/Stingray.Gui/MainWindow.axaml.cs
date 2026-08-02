@@ -82,8 +82,10 @@ public partial class MainWindow : Window
     /// </summary>
     private async Task OptimizeBatchAsync()
     {
+        // Bundles, not rows: the grid holds one line per texture, and several
+        // of them can come from the same bundle.
         var confirm = new ConfirmWindow(
-            S.ConfirmBatchHeading(_viewModel.Textures.Count), S.ConfirmBatchBody);
+            S.ConfirmBatchHeading(_viewModel.AnalysedBundleCount), S.ConfirmBatchBody);
 
         if (await confirm.ShowDialog<bool>(this))
             await _viewModel.OptimizeBatchAsync();

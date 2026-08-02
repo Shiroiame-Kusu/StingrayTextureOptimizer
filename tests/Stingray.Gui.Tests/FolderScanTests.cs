@@ -25,11 +25,16 @@ public class FolderScanTests : IDisposable
     }
 
     /// <summary>Puts a bundle at root/<paramref name="folders"/>.</summary>
-    private string AddMod(int width = 64, params string[] folders)
+    private string AddMod(int width = 64, params string[] folders) =>
+        AddMod(textures: 1, width, folders);
+
+    /// <summary>Puts a bundle of <paramref name="textures"/> textures under the root.</summary>
+    private string AddMod(int textures, int width, params string[] folders)
     {
-        var fixture = new SyntheticBundle()
-            .AddTexture(width, width, (x, y) => ((byte)x, (byte)y, (byte)0, (byte)255))
-            .Write();
+        var builder = new SyntheticBundle();
+        for (var i = 0; i < textures; i++)
+            builder.AddTexture(width, width, (x, y) => ((byte)(x + i), (byte)y, (byte)0, (byte)255));
+        var fixture = builder.Write();
 
         var target = Path.Combine([_root, .. folders]);
         Directory.CreateDirectory(target);
@@ -257,6 +262,179 @@ public class FolderScanTests : IDisposable
 
         Assert.Equal(64, vm.StreamFloor.Value);
         Assert.Contains("Generate mipmaps", vm.Status);
+    }
+
+    /// <summary>
+    /// A mod's box says what its options say. There is no half-ticked bundle,
+    /// because there is nothing under one to be half of — and a bundle left
+    /// there would look chosen while counting as nothing.
+    /// </summary>
+    [Fact]
+    public async Task ABundleCannotBeLeftHalfTicked()
+    {
+        AddMod(folders: ["R-36", "Shorty"]);
+        AddMod(folders: "SFX");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+
+        var bundle = vm.Mods.Single(m => m.Name == "SFX");
+        bundle.IsChecked = null;
+
+        Assert.False(bundle.IsChecked);
+        Assert.Empty(vm.CheckedBundles);
+
+        // A folder still reports it, since a folder really can be part-chosen.
+        var mod = vm.Mods.Single(m => m.Name == "R-36");
+        Assert.False(mod.IsBundle);
+    }
+
+    /// <summary>
+    /// The analysis belongs to the bundles it was run over. Untick one and it
+    /// no longer describes what is chosen — so it goes, rather than sitting
+    /// there while the button offers to write bundles nobody has ticked.
+    /// </summary>
+    [Fact]
+    public async Task UntickingAnAnalysedBundleTakesItsPlanOffScreen()
+    {
+        AddMod(folders: ["R-36", "Shorty"]);
+        AddMod(folders: ["R-36", "Long boi"]);
+        AddMod(folders: "SFX");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        vm.Mods.Single(m => m.Name == "R-36").IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        Assert.True(vm.HasAnalysedBatch);
+        var analysed = vm.Status;
+
+        vm.Mods.Single(m => m.Name == "R-36").Children.First().IsChecked = false;
+
+        Assert.False(vm.HasAnalysedBatch);
+        Assert.Empty(vm.Textures);
+        Assert.Empty(vm.Skipped);
+        Assert.Equal(0, vm.CurrentSize);
+        Assert.NotEqual(analysed, vm.Status);
+
+        // And the button offers the analysis the remaining tick now needs.
+        Assert.True(vm.WouldAnalyse);
+        Assert.Single(vm.CheckedBundles);
+    }
+
+    /// <summary>Ticking more is the same problem from the other side.</summary>
+    [Fact]
+    public async Task TickingAnotherBundleAfterAnAnalysisRetiresIt()
+    {
+        AddMod(folders: "Alpha");
+        AddMod(folders: "Beta");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        vm.Mods.Single(m => m.Name == "Alpha").IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+        Assert.True(vm.HasAnalysedBatch);
+
+        vm.Mods.Single(m => m.Name == "Beta").IsChecked = true;
+
+        Assert.False(vm.HasAnalysedBatch);
+        Assert.True(vm.WouldAnalyse);
+        Assert.Equal(2, vm.CheckedBundles.Count);
+    }
+
+    /// <summary>But leaving the ticks alone leaves the analysis alone.</summary>
+    [Fact]
+    public async Task AnAnalysisSurvivesTheTicksItWasBuiltFrom()
+    {
+        AddMod(folders: ["R-36", "Shorty"]);
+        AddMod(folders: ["R-36", "Long boi"]);
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        vm.Mods.Single(m => m.Name == "R-36").IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        vm.RefreshSelection();
+
+        Assert.True(vm.HasAnalysedBatch);
+        Assert.NotEmpty(vm.Textures);
+    }
+
+    /// <summary>
+    /// Opening one bundle replaces the grid, so a batch cannot outlive it: the
+    /// totals would sum the batch against this bundle's size, and the button
+    /// would still write the batch while the screen showed something else.
+    /// </summary>
+    [Fact]
+    public async Task OpeningOneBundleRetiresAnAnalysedBatch()
+    {
+        AddMod(folders: "Alpha");
+        AddMod(width: 128, folders: "Beta");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        vm.Mods.Single(m => m.Name == "Alpha").IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+        Assert.True(vm.HasAnalysedBatch);
+
+        var beta = vm.Mods.Single(m => m.Name == "Beta");
+        vm.SelectedMod = beta;
+        await SettleAsync(vm);
+
+        Assert.False(vm.HasAnalysedBatch);
+        Assert.Equal(beta.Bundle!.Path, vm.BundlePath);
+
+        // The totals are this bundle's alone, not this bundle's against a batch.
+        Assert.True(vm.CurrentSize > 0);
+        Assert.True(vm.PredictedSize < vm.CurrentSize);
+    }
+
+    /// <summary>
+    /// The confirmation counts bundles. The grid holds one row per texture and
+    /// several of them can come from one bundle, so the two are not the same
+    /// number and saying "optimize 4 bundles" when there are two is a lie about
+    /// what is being rewritten.
+    /// </summary>
+    [Fact]
+    public async Task TheBatchCountIsBundlesNotRows()
+    {
+        AddMod(textures: 3, width: 64, folders: "Alpha");
+        AddMod(textures: 2, width: 64, folders: "Beta");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        foreach (var node in vm.Mods) node.IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        Assert.Equal(2, vm.AnalysedBundleCount);
+        Assert.Equal(5, vm.Textures.Count);
+    }
+
+    /// <summary>
+    /// The panel's sizes come from the scan, so after a write they would go on
+    /// quoting what the bundles used to cost — the one number the exercise was
+    /// about, left saying the thing that is no longer true.
+    /// </summary>
+    [Fact]
+    public async Task TheTreeQuotesWhatTheFilesCostAfterAWrite()
+    {
+        AddMod(folders: ["R-36", "Shorty"]);
+        AddMod(folders: ["R-36", "Long boi"]);
+
+        var vm = new MainWindowViewModel { Quality = new QualityChoice(EncodeQuality.Fast, "fast") };
+        await vm.ScanAsync(_root);
+
+        var mod = vm.Mods.Single(m => m.Name == "R-36");
+        var before = mod.GpuSize;
+
+        mod.IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+        await vm.OptimizeBatchAsync();
+
+        Assert.True(mod.GpuSize < before, $"{mod.GpuSize} is not below {before}");
+        foreach (var bundle in mod.Bundles)
+            Assert.Equal(new FileInfo(bundle.Bundle!.Path + ".gpu_resources").Length,
+                         bundle.GpuSize);
     }
 
     [Fact]

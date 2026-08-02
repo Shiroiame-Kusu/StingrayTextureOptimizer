@@ -39,6 +39,28 @@ Figures quoted here are measured on real bundles, not estimated.
     verifies each bundle in turn, and anything that would not shrink is counted
     and left alone rather than forced.
 
+### Fixed
+
+- **A mod could be clicked into the half-ticked state**, where its options
+  stayed ticked and the mod looked chosen while nothing under it counted as
+  chosen. The tick box was three-state, which puts "some of these" into the
+  click cycle rather than leaving it as something a folder is told it is by its
+  children; a bundle, having nothing under it, could be parked there too.
+  Half-ticked is now shown and never asked for.
+- **An analysis outlived the selection it described.** Unticking the bundles
+  that had just been analysed left their textures in the grid, their totals in
+  the corner and the button reading Optimize — which would have written them.
+  Changing which bundles are ticked now retires the analysis exactly as
+  changing a setting does, and says so instead of leaving the previous sentence
+  standing.
+- **Opening a single bundle while a batch was analysed mixed the two**: the
+  grid showed the one bundle, the totals summed the batch against it, and
+  Optimize wrote the batch.
+- **The batch confirmation counted texture rows and called them bundles**, so
+  optimising two bundles holding five textures asked to rewrite five bundles.
+- **The mod list went on quoting what a bundle used to cost after rewriting
+  it**, since the sizes came from the scan.
+
 ## [0.1.2] — 2026-08-02
 
 ### Added
