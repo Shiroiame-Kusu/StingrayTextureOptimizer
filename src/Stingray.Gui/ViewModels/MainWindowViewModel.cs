@@ -564,7 +564,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
             _batch.Add(entry);
             foreach (var item in entry.Plan.Textures)
-                Textures.Add(new TextureItemViewModel(item, RecalculateTotals, node.Name));
+                Textures.Add(new TextureItemViewModel(item, RecalculateTotals,
+                                                      node.Name, node.Owner?.Name ?? ""));
             foreach (var skip in entry.Plan.Skipped)
                 Skipped.Add(skip);
         }

@@ -566,6 +566,35 @@ public class FolderScanTests : IDisposable
     }
 
     /// <summary>
+    /// The Mod column leads with the mod and puts the option under it: "Shorty"
+    /// on its own says nothing, and the mod is what the column is scanned for.
+    /// A bundle that is a mod in its own right is one line, not the same name
+    /// written twice.
+    /// </summary>
+    [Fact]
+    public async Task TheModColumnLeadsWithTheModAndNamesTheOptionUnderIt()
+    {
+        AddMod(folders: ["R-36", "Shorty"]);
+        AddMod(folders: "SFX");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        foreach (var node in vm.Mods) node.IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        var option = vm.Textures.Single(t => t.ModName == "Shorty");
+        Assert.Equal("R-36", option.ModTitle);
+        Assert.Equal("Shorty", option.ModDetail);
+        Assert.True(option.HasModDetail);
+        Assert.Equal("R-36 › Shorty", option.ModTooltip);
+
+        var standalone = vm.Textures.Single(t => t.ModName == "SFX");
+        Assert.Equal("SFX", standalone.ModTitle);
+        Assert.Empty(standalone.ModDetail);
+        Assert.False(standalone.HasModDetail);
+    }
+
+    /// <summary>
     /// The header names whatever is open. A scanned folder has no open bundle,
     /// and a batch analysis clears the one there was, so a header that only
     /// knows about bundles says nothing is loaded over a list of two hundred.

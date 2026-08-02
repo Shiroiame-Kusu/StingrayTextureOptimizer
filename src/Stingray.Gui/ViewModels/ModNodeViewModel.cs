@@ -68,6 +68,22 @@ public sealed partial class ModNodeViewModel : ObservableObject
     /// <summary>Set when a folder holds several bundles, which then need telling apart.</summary>
     public bool ShowFileName { get; set; }
 
+    /// <summary>
+    /// The mod this line is part of — the outermost folder above it — or null
+    /// when it is a mod in its own right rather than one of something's options.
+    /// </summary>
+    public ModNodeViewModel? Owner
+    {
+        get
+        {
+            if (Parent is null) return null;
+
+            var root = Parent;
+            while (root.Parent is not null) root = root.Parent;
+            return root;
+        }
+    }
+
     /// <summary>Whether this line's bundles are queued for optimising.</summary>
     [ObservableProperty] private bool? _isChecked = false;
 

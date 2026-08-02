@@ -197,9 +197,22 @@
           <DataGridCheckBoxColumn Header="" Width="40"
                                   Binding="{Binding Include, x:DataType=vm:TextureItemViewModel}" />
           <!-- Which bundle a row came from. Blank for a single bundle, and the
-               only thing that tells rows apart once several are analysed at once. -->
-          <DataGridTextColumn Header="{x:Static loc:S.ColumnMod}" IsReadOnly="True" Width="150"
-                              Binding="{Binding ModName, x:DataType=vm:TextureItemViewModel}" />
+               only thing that tells rows apart once several are analysed at once.
+               The mod on top and the option beneath it, because a name like
+               "NoTubes" says nothing on its own and the mod is what you scan
+               the column for. -->
+          <DataGridTemplateColumn Header="{x:Static loc:S.ColumnMod}" IsReadOnly="True" Width="150">
+            <DataGridTemplateColumn.CellTemplate>
+              <DataTemplate x:DataType="vm:TextureItemViewModel">
+                <StackPanel VerticalAlignment="Center" Margin="4,3"
+                            ToolTip.Tip="{Binding ModTooltip}">
+                  <TextBlock Text="{Binding ModTitle}" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding ModDetail}" IsVisible="{Binding HasModDetail}"
+                             FontSize="11" Opacity="0.55" TextTrimming="CharacterEllipsis" />
+                </StackPanel>
+              </DataTemplate>
+            </DataGridTemplateColumn.CellTemplate>
+          </DataGridTemplateColumn>
           <DataGridTextColumn Header="{x:Static loc:S.ColumnTexture}" IsReadOnly="True" Width="148"
                               Binding="{Binding Name, x:DataType=vm:TextureItemViewModel}" />
           <DataGridTextColumn Header="{x:Static loc:S.ColumnDimensions}" IsReadOnly="True" Width="200"

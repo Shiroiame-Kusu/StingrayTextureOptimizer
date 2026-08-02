@@ -20,13 +20,15 @@ public sealed partial class TextureItemViewModel : ObservableObject
 {
     private readonly Action _onChanged;
 
-    public TextureItemViewModel(TexturePlanItem item, Action onChanged, string modName = "")
+    public TextureItemViewModel(TexturePlanItem item, Action onChanged,
+                                string modName = "", string modOwner = "")
     {
         Item = item;
         _onChanged = onChanged;
         _include = item.Include;
         _targetFormat = item.TargetFormat;
         ModName = modName;
+        ModOwner = modOwner;
     }
 
     /// <summary>
@@ -34,6 +36,24 @@ public sealed partial class TextureItemViewModel : ObservableObject
     /// analysed at once, and then it is the only thing that says which is which.
     /// </summary>
     public string ModName { get; }
+
+    /// <summary>The mod that bundle belongs to, empty when it is one in its own right.</summary>
+    public string ModOwner { get; }
+
+    /// <summary>
+    /// The mod, which is what you are looking for when scanning the column: an
+    /// option's own name is meaningless without it, and a bundle that is a mod
+    /// in its own right is the answer already.
+    /// </summary>
+    public string ModTitle => ModOwner.Length > 0 ? ModOwner : ModName;
+
+    /// <summary>Which option of that mod, when it has options to tell apart.</summary>
+    public string ModDetail => ModOwner.Length > 0 ? ModName : string.Empty;
+
+    public bool HasModDetail => ModDetail.Length > 0;
+
+    /// <summary>Both in full, since the column is too narrow for either.</summary>
+    public string ModTooltip => HasModDetail ? $"{ModTitle} › {ModDetail}" : ModTitle;
 
     public TexturePlanItem Item { get; }
 
