@@ -88,6 +88,16 @@ automatically.
 If you installed the mod rather than made it, those files are wherever your mod
 manager keeps them — one folder per mod, each holding that trio of files.
 
+**Or press Open folder… and let it find them.** Point it at the folder your mod
+manager keeps mods in and it searches everything underneath, listing one entry
+per bundle with what each costs, biggest first. Click one to see its plan.
+
+![Scanning a mod manager's folder](docs/images/04-scan.png)
+
+Any `backup` folder is skipped, including the ones this tool writes — otherwise
+every mod you had already optimised would appear twice, once as it is and once
+as it was.
+
 **3. Look, then click Optimize.** The grid lists every texture that can be
 shrunk and what it will become. The bottom-right shows the total. Press
 **Optimize** when you are happy.

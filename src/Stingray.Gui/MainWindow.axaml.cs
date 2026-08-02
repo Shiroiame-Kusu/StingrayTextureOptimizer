@@ -42,6 +42,18 @@ public partial class MainWindow : Window
             await _viewModel.LoadAsync(path);
     }
 
+    private async void OnOpenFolderClicked(object? sender, RoutedEventArgs e)
+    {
+        var folders = await StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
+        {
+            Title = S.PickAFolder,
+            AllowMultiple = false,
+        });
+
+        if (folders.FirstOrDefault()?.TryGetLocalPath() is { } path)
+            await _viewModel.ScanAsync(path);
+    }
+
     private async void OnOptimizeClicked(object? sender, RoutedEventArgs e)
     {
         var confirm = new ConfirmWindow(S.ConfirmHeading, S.ConfirmBody);

@@ -19,6 +19,60 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<TextureItemViewModel> Textures { get; } = [];
     public ObservableCollection<SkippedTexture> Skipped { get; } = [];
 
+    /// <summary>Bundles found by scanning a folder, largest first.</summary>
+    public ObservableCollection<DiscoveredModViewModel> Mods { get; } = [];
+
+    public bool HasMods => Mods.Count > 0;
+
+    /// <summary>
+    /// The row whose bundle is open. Setting it loads that bundle, which is what
+    /// makes the list behave like a list rather than a report.
+    /// </summary>
+    [ObservableProperty] private DiscoveredModViewModel? _selectedMod;
+
+    partial void OnSelectedModChanged(DiscoveredModViewModel? value)
+    {
+        if (value is null || IsBusy) return;
+        foreach (var mod in Mods) mod.IsOpen = ReferenceEquals(mod, value);
+        _ = LoadAsync(value.Path);
+    }
+
+    /// <summary>
+    /// Walks a folder for bundles and lists what it finds. Nothing is opened:
+    /// a mod manager's folder can hold gigabytes, and the point is to choose.
+    /// </summary>
+    public async Task ScanAsync(string folder)
+    {
+        IsBusy = true;
+        Status = S.Scanning(folder);
+        Mods.Clear();
+        OnPropertyChanged(nameof(HasMods));
+
+        try
+        {
+            var found = await Task.Run(() => BundleDiscovery.Scan(folder));
+
+            var number = 1;
+            foreach (var bundle in found)
+                Mods.Add(new DiscoveredModViewModel(bundle, number++));
+
+            Status = found.Count == 0
+                ? S.FoundNothing(folder)
+                : S.FoundMods(found.Count, Format.Bytes(found.Sum(f => f.GpuSize)));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
+                                      or ArgumentException)
+        {
+            Status = S.CouldNotOpen(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+            OnPropertyChanged(nameof(HasMods));
+            OnPropertyChanged(nameof(CanOptimize));
+        }
+    }
+
     public IReadOnlyList<StrategyChoice> Strategies { get; } =
     [
         new(OptimizationStrategy.Balanced, S.StrategyBalanced),

@@ -20,6 +20,7 @@ internal static class Screenshot
 {
     public static string? OutputPath { get; private set; }
     public static string? BundlePath { get; private set; }
+    public static string? ScanPath { get; private set; }
     public static int SizeCap { get; private set; }
     public static int StreamFloor { get; private set; }
     public static bool Requested => OutputPath is not null;
@@ -37,6 +38,9 @@ internal static class Screenshot
                     break;
                 case "--bundle" when i + 1 < args.Length:
                     BundlePath = args[++i];
+                    break;
+                case "--scan" when i + 1 < args.Length:
+                    ScanPath = args[++i];
                     break;
                 case "--cap" when i + 1 < args.Length:
                     SizeCap = int.TryParse(args[++i], out var cap) ? cap : 0;
@@ -68,6 +72,9 @@ internal static class Screenshot
             var floor = viewModel.StreamFloors.FirstOrDefault(f => f.Value == StreamFloor);
             if (floor is not null) viewModel.StreamFloor = floor;
         }
+
+        if (ScanPath is not null)
+            await viewModel.ScanAsync(ScanPath);
 
         if (BundlePath is not null)
             await viewModel.LoadAsync(BundlePath);

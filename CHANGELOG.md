@@ -14,7 +14,16 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ## [Unreleased]
 
-Nothing yet.
+### Added
+
+- **Open folder…** scans a directory for mods instead of making you hunt for
+  bundle files. Everything underneath is searched, one entry per bundle with
+  what it costs, largest first; clicking one opens its plan. On a real mod
+  manager's folder that is 213 bundles and 1.4 GiB of GPU data.
+  - `backup` folders are skipped, including the ones this tool writes, so a mod
+    already optimised does not appear twice — once as it is and once as it was.
+    Verified against a real folder: 223 `.gpu_resources` files, 10 of them
+    inside backups, 213 listed.
 
 ## [0.1.2] — 2026-08-02
 
