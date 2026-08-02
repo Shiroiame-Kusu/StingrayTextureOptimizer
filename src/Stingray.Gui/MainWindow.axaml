@@ -10,7 +10,7 @@
         x:Class="Stingray.Gui.MainWindow"
         x:DataType="vm:MainWindowViewModel"
         Title="{Binding Title}"
-        Width="1320" Height="740" MinWidth="900" MinHeight="520">
+        Width="1560" Height="820" MinWidth="900" MinHeight="520">
 
   <DockPanel Margin="12">
 
@@ -136,7 +136,7 @@
          still gets the whole window. The tree is the folder tree: a mod packages
          its variants as folders, so nothing else can say which mod an option
          called "Shorty" belongs to. -->
-    <Border DockPanel.Dock="Left" Width="320" Margin="0,0,12,0"
+    <Border DockPanel.Dock="Left" Width="360" Margin="0,0,12,0"
             IsVisible="{Binding HasMods}">
       <DockPanel>
         <TextBlock DockPanel.Dock="Top" Margin="0,0,0,6" FontWeight="SemiBold"
@@ -158,8 +158,13 @@
               <Grid ColumnDefinitions="Auto,*" Margin="0,2">
                 <CheckBox Grid.Column="0" IsChecked="{Binding IsChecked}" IsThreeState="True"
                           VerticalAlignment="Center" Margin="0,0,6,0" />
-                <StackPanel Grid.Column="1">
-                  <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"
+                <!-- Bounded explicitly: the tree measures its rows with no width
+                     limit, so without this a long name neither wraps nor gives
+                     the scrollbar anything to scroll — it just runs off the
+                     edge and is clipped. Panel width less the tick box and the
+                     deepest indent. -->
+                <StackPanel Grid.Column="1" MaxWidth="270">
+                  <TextBlock Text="{Binding Name}" TextWrapping="Wrap"
                              ToolTip.Tip="{Binding Name}" />
                   <TextBlock Text="{Binding Detail}" Opacity="0.55" FontSize="11"
                              TextTrimming="CharacterEllipsis" />
