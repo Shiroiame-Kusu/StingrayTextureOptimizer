@@ -565,6 +565,34 @@ public class FolderScanTests : IDisposable
                          bundle.GpuSize);
     }
 
+    /// <summary>
+    /// The header names whatever is open. A scanned folder has no open bundle,
+    /// and a batch analysis clears the one there was, so a header that only
+    /// knows about bundles says nothing is loaded over a list of two hundred.
+    /// </summary>
+    [Fact]
+    public async Task TheHeaderNamesTheFolderWhenNoSingleBundleIsOpen()
+    {
+        AddMod(folders: "Alpha");
+        AddMod(folders: "Beta");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+
+        Assert.Equal(_root, vm.BundleLabel);
+
+        // A bundle being looked at is more specific, so it wins.
+        var alpha = vm.Mods.Single(m => m.Name == "Alpha");
+        vm.SelectedMod = alpha;
+        await SettleAsync(vm);
+        Assert.Equal(alpha.Bundle!.Path, vm.BundleLabel);
+
+        // And analysing a batch, which opens no single bundle, falls back.
+        foreach (var node in vm.Mods) node.IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+        Assert.Equal(_root, vm.BundleLabel);
+    }
+
     [Fact]
     public async Task AFolderWithNoModsSaysSoRatherThanLookingEmpty()
     {

@@ -158,6 +158,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         // that is about to be listed.
         _analysed.Clear();
         ClearDisplay();
+        ScannedFolder = null;
         Status = S.Scanning(folder);
         Mods.Clear();
         OnPropertyChanged(nameof(HasMods));
@@ -169,6 +170,9 @@ public sealed partial class MainWindowViewModel : ObservableObject
             foreach (var node in ModNodeViewModel.Build(found)) Mods.Add(node);
             Track(Mods);
 
+            // Named even when it holds nothing, since which folder was picked is
+            // the first thing to check when it turns out to hold nothing.
+            ScannedFolder = folder;
             Status = found.Count == 0
                 ? S.FoundNothing(folder)
                 : S.FoundMods(found.Count, Format.Bytes(found.Sum(f => f.GpuSize)));
@@ -278,8 +282,21 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public string MipModeHint =>
         CanChooseMipMode ? S.MipModeHintActive : S.MipModeHintDisabled;
 
-    /// <summary>The open bundle, or a standing invitation to open one.</summary>
-    public string BundleLabel => BundlePath ?? S.NoBundleLoaded;
+    /// <summary>
+    /// What is open: the bundle being looked at, or the folder being chosen
+    /// from, or a standing invitation to open one of the two.
+    /// </summary>
+    /// <remarks>
+    /// A scanned folder has no open bundle — and after a batch analysis it has
+    /// none either — so a label that only knows about bundles spends most of
+    /// folder mode saying nothing is loaded, over a list of two hundred mods.
+    /// </remarks>
+    public string BundleLabel => BundlePath ?? ScannedFolder ?? S.NoBundleLoaded;
+
+    /// <summary>The folder the mod list came from, once one has been scanned.</summary>
+    [ObservableProperty] private string? _scannedFolder;
+
+    partial void OnScannedFolderChanged(string? value) => OnPropertyChanged(nameof(BundleLabel));
 
     [ObservableProperty] private string? _bundlePath;
     [ObservableProperty] private string _status = S.OpenABundleToBegin;

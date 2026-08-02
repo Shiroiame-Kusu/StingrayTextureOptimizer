@@ -20,7 +20,7 @@
         <Button Content="{x:Static loc:S.OpenFolder}" Click="OnOpenFolderClicked"
                 IsEnabled="{Binding !IsBusy}" ToolTip.Tip="{x:Static loc:S.OpenFolderHint}" />
         <TextBlock VerticalAlignment="Center" Opacity="0.75" TextTrimming="CharacterEllipsis"
-                   ToolTip.Tip="{Binding BundlePath}"
+                   ToolTip.Tip="{Binding BundleLabel}"
                    Text="{Binding BundleLabel}" />
       </StackPanel>
     </Border>
