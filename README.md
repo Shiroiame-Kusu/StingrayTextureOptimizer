@@ -100,7 +100,7 @@ If you want to go further, the one setting worth touching is **Max size**. It
 halves oversized textures, which is the only option here that actually throws
 detail away. It is off by default.
 
-![The same bundle with a 2048 cap, showing the measured cost per texture](docs/images/02-resize.png)
+![A larger, already-compressed mod with a 2048 cap, showing the measured cost per texture](docs/images/02-resize.png)
 
 Turn it to `2048 max` and the **Resize cost** column fills in with what halving
 each texture actually costs, measured on its own pixels. Rows saying *nothing
