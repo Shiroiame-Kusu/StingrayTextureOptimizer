@@ -357,8 +357,8 @@ public static class S
         double.PositiveInfinity => T("nothing lost", "没有损失"),
         var d when double.IsNaN(d) => T("not measured", "未测量"),
         >= 45 => T($"nothing visible lost ({db:F0} dB)", $"没有可见损失（{db:F0} dB）"),
-        >= 36 => T($"slight softening ({db:F0} dB)", $"略微变软（{db:F0} dB）"),
-        >= 30 => T($"visible softening ({db:F0} dB)", $"可见变软（{db:F0} dB）"),
+        >= 36 => T($"slight softening ({db:F0} dB)", $"略微变糊（{db:F0} dB）"),
+        >= 30 => T($"visible softening ({db:F0} dB)", $"可见变糊（{db:F0} dB）"),
         _ => T($"real detail lost ({db:F0} dB)", $"真的丢了细节（{db:F0} dB）"),
     };
 }
