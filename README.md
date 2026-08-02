@@ -21,8 +21,16 @@
 > GLHF!
 
 Shrinks Stingray/Bitsquid game bundles by block-compressing the textures inside
-them. Built for mod authors whose `.gpu_resources` file has ballooned to hundreds
-of megabytes.
+them.
+
+**For anyone playing with mods**, whose card is running out of video memory
+because the mods they installed carry hundreds of megabytes of textures. You do
+not need to have made a mod to use this, or to ask permission: it works on a mod
+you downloaded exactly as it works on one you wrote, and it keeps a backup so you
+can put it back.
+
+**For mod authors**, whose `.gpu_resources` has ballooned and who would rather
+ship something smaller than ask every player to deal with it.
 
 Works on bundles from Helldivers 2, Darktide and Vermintide 2 — the
 `<hash>.patch_N` + `.gpu_resources` pair.
@@ -70,10 +78,13 @@ New to this? Three steps.
 **1. Download and unpack.** Grab the archive for your system from
 [Releases](../../releases) and unzip it anywhere. Nothing to install.
 
-**2. Point it at your mod.** Run `stingray-tex-gui`, click **Open bundle…**, and
+**2. Point it at a mod.** Run `stingray-tex-gui`, click **Open bundle…**, and
 pick the bundle file — the one with **no extension** or ending in `.patch_0`,
 `.patch_1` and so on. Not the `.gpu_resources` file; that one is found
 automatically.
+
+If you installed the mod rather than made it, those files are wherever your mod
+manager keeps them — one folder per mod, each holding that trio of files.
 
 **3. Look, then click Optimize.** The grid lists every texture that can be
 shrunk and what it will become. The bottom-right shows the total. Press
@@ -120,8 +131,14 @@ to 111.9 MiB, with exactly one texture flagged as visibly softening.
 - Non-texture data — models, bones, materials — is copied through untouched, byte
   for byte.
 
-**Test the result in-game before you share a mod.** Keep the `backup/` folder
-until you have.
+**Load the result in-game before you rely on it** — and before you share it, if
+it is a mod you are publishing. Keep the `backup/` folder until you have.
+
+If you are shrinking somebody else's mod for your own machine, nothing leaves
+your disk: the tool rewrites the files in place, and the `backup/` folder puts
+the original back if you want it. It changes nothing about how the mod is
+installed or updated — though reinstalling or updating it will replace your
+shrunk copy, so keep the command handy.
 
 ### If something looks wrong
 
@@ -824,7 +841,8 @@ One caveat specific to deduplication: sharing a payload between entries is
 consistent with the format, but no vanilla bundle examined actually does it, so
 it is not a pattern the engine has been *observed* to rely on. It verifies
 clean and every entry resolves to identical bytes — but this is the part most
-worth confirming in-game before you ship. `--no-dedup` avoids it entirely.
+worth confirming in-game, whether you are about to publish the mod or just to
+play it. `--no-dedup` avoids it entirely.
 
 That said: **this rewrites game files.** Keep the backups until you have loaded
 the result in-game.
