@@ -845,6 +845,10 @@ committed — so `SyntheticBundle` constructs valid ones in memory.
 See [`docs/bundle-format.md`](docs/bundle-format.md) for the container layout,
 including which fields remain unidentified.
 
+## Changes
+
+See [CHANGELOG.md](CHANGELOG.md).
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Additions to the type-id table are
