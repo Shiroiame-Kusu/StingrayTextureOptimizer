@@ -34,28 +34,32 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public bool HasCheckedBundles => CheckedBundles.Count > 0;
 
     /// <summary>
-    /// The plans behind an analysed batch, kept so Optimize applies exactly what
-    /// was reviewed rather than re-deciding on its own.
+    /// Every plan worked out under the settings as they stand, by bundle path.
     /// </summary>
-    private readonly List<(Bundle Bundle, OptimizationPlan Plan)> _batch = [];
+    /// <remarks>
+    /// Kept rather than thrown away when the ticks change. Analysing a folder is
+    /// minutes of reading, and unticking one mod says nothing about the others —
+    /// so untick and retick, or go and look at a bundle and come back, and the
+    /// work is still there. What does retire them is a settings change, since a
+    /// plan describes the settings it was built under.
+    /// </remarks>
+    private readonly Dictionary<string, (Bundle Bundle, OptimizationPlan Plan)> _analysed =
+        new(StringComparer.Ordinal);
 
     /// <summary>
-    /// The bundles that analysis was asked for, whether or not each could be
-    /// read. What the ticks are compared against to notice that the plans on
-    /// screen have stopped describing what is chosen.
+    /// The plans on screen: the ticked bundles that have one. Optimize applies
+    /// exactly these, so it writes what was reviewed rather than re-deciding.
     /// </summary>
-    private readonly HashSet<string> _analysed = new(StringComparer.Ordinal);
+    private readonly List<(Bundle Bundle, OptimizationPlan Plan)> _batch = [];
 
     private bool HasBatch => _batch.Count > 0;
 
     /// <summary>How many bundles the analysis on screen covers.</summary>
     public int AnalysedBundleCount => _batch.Count;
 
-    /// <summary>Whether what is ticked is still what was analysed.</summary>
-    private bool TicksMatchBatch =>
-        CheckedBundles is var ticked
-        && ticked.Count == _analysed.Count
-        && ticked.All(b => _analysed.Contains(b.Bundle!.Path));
+    /// <summary>Ticked bundles with no plan yet — all that Analyse has left to do.</summary>
+    private IReadOnlyList<ModNodeViewModel> Pending =>
+        [.. CheckedBundles.Where(b => !_analysed.ContainsKey(b.Bundle!.Path))];
 
     /// <summary>
     /// Textures in whatever has been analysed that already carry a mip chain, or
@@ -86,32 +90,42 @@ public sealed partial class MainWindowViewModel : ObservableObject
         : string.Empty;
 
     /// <summary>
-    /// Ticking bundles does not analyse them, so the button offers that first and
-    /// only becomes Optimize once there is a plan on screen to have looked at.
+    /// Ticking bundles does not analyse them, so the button offers that first,
+    /// and offers it for the ones still owing an analysis rather than for the
+    /// whole selection.
     /// </summary>
     public string OptimizeLabel =>
-        HasBatch ? S.Optimize
-        : CheckedBundles.Count > 0 ? S.AnalyseSelected(CheckedBundles.Count)
-        : S.Optimize;
+        Pending is { Count: > 0 } pending ? S.AnalyseSelected(pending.Count) : S.Optimize;
 
     /// <summary>Whether pressing the button would analyse rather than write.</summary>
-    public bool WouldAnalyse => !HasBatch && CheckedBundles.Count > 0;
+    public bool WouldAnalyse => Pending.Count > 0;
 
     /// <summary>Ticking anything changes what Optimize would do, so it has to know.</summary>
     public void RefreshSelection()
     {
-        // An analysis describes the bundles it was run over. Once the ticks say
-        // something else it describes nothing that is chosen, and leaving it up
-        // would show one set of bundles in the grid while the button wrote
-        // another — which is exactly what pressing it would have done.
-        if (HasBatch && !IsBusy && !TicksMatchBatch) RetireBatch();
-
         OnPropertyChanged(nameof(CheckedBundles));
         OnPropertyChanged(nameof(HasCheckedBundles));
         OnPropertyChanged(nameof(SelectionSummary));
         OnPropertyChanged(nameof(OptimizeLabel));
         OnPropertyChanged(nameof(WouldAnalyse));
         OnPropertyChanged(nameof(CanOptimize));
+        OnPropertyChanged(nameof(HasAnalysedBatch));
+    }
+
+    /// <summary>
+    /// A tick changed, so what is on screen changes with it — drawn from the
+    /// plans already worked out. Unticking a mod takes it off the screen and
+    /// ticking it back puts it on again, and neither costs an analysis.
+    /// </summary>
+    private void OnSelectionChanged()
+    {
+        if (!IsBusy)
+        {
+            RebuildBatch();
+            SayWhatIsOnScreen();
+        }
+
+        RefreshSelection();
     }
 
     /// <summary>
@@ -124,12 +138,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         if (value is null || !value.IsBundle || IsBusy) return;
 
-        // Opening one bundle replaces the grid, so an analysed batch cannot
-        // survive it: its totals would be summed against this bundle's, and the
-        // button would still write the batch while the screen showed this.
-        RetireBatch();
-        RefreshSelection();
-
+        // Opening one bundle replaces the grid, so an analysed batch cannot stay
+        // on screen with it: the totals would sum the batch against this
+        // bundle's, and the button would write the batch while showing this.
+        // The plans behind it are kept, so a tick brings them straight back.
         foreach (var bundle in AllBundles) bundle.IsOpen = ReferenceEquals(bundle, value);
         _ = LoadAsync(value.Bundle!.Path);
     }
@@ -142,9 +154,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         IsBusy = true;
 
-        // Before the status is set, not after: retiring writes one of its own,
-        // and the scan's is the one worth reading.
-        RetireBatch();
+        // A different folder: nothing kept from the last one describes anything
+        // that is about to be listed.
+        _analysed.Clear();
+        ClearDisplay();
         Status = S.Scanning(folder);
         Mods.Clear();
         OnPropertyChanged(nameof(HasMods));
@@ -180,7 +193,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             node.PropertyChanged += (_, e) =>
             {
-                if (e.PropertyName == nameof(ModNodeViewModel.IsChecked)) RefreshSelection();
+                if (e.PropertyName == nameof(ModNodeViewModel.IsChecked) && !node.IsAnEcho)
+                    OnSelectionChanged();
             };
             Track(node.Children);
         }
@@ -363,8 +377,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
     {
         IsBusy = true;
         Status = S.Analysing(Path.GetFileName(path));
-        Textures.Clear();
-        Skipped.Clear();
+
+        // Only the grid: the plan behind it stays until its replacement exists,
+        // so that a setting asking what this bundle contains — whether anything
+        // in it carries a mip chain — can still be answered while this runs.
+        ClearGrid();
 
         try
         {
@@ -373,21 +390,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
             var mips = MipSelection.Value;
             var floor = StreamFloor.Value;
             var addMips = AddMips;
-            var (plan, bundle) = await Task.Run(() =>
-            {
-                var loaded = Bundle.Load(path);
-                if (!loaded.HasGpuResources)
-                    throw new FileNotFoundException(
-                        $"No .gpu_resources companion found next to {Path.GetFileName(path)}.");
 
-                using var gpu = GpuResourceFile.Open(loaded.GpuResourcePath);
-                return (OptimizationPlan.Build(loaded, gpu, strategy, CollapseSolidColours,
-                                               maxDimension: cap, mipMode: mips,
-                                               streamFloor: floor,
-                                               generateMips: addMips), loaded);
-            });
+            // Already worked out under these settings — from a batch, or from
+            // the last time this one was opened. The answer cannot have changed,
+            // so there is nothing to be had by asking again.
+            var (plan, bundle) = _analysed.TryGetValue(path, out var kept)
+                ? (kept.Plan, kept.Bundle)
+                : await Task.Run(() =>
+                {
+                    var loaded = Bundle.Load(path);
+                    if (!loaded.HasGpuResources)
+                        throw new FileNotFoundException(
+                            $"No .gpu_resources companion found next to {Path.GetFileName(path)}.");
+
+                    using var gpu = GpuResourceFile.Open(loaded.GpuResourcePath);
+                    return (OptimizationPlan.Build(loaded, gpu, strategy, CollapseSolidColours,
+                                                   maxDimension: cap, mipMode: mips,
+                                                   streamFloor: floor,
+                                                   generateMips: addMips), loaded);
+                });
 
             _bundle = bundle;
+            _analysed[path] = (bundle, plan);
             BundlePath = path;
             OnPropertyChanged(nameof(BundleLabel));
             CurrentSize = plan.CurrentGpuSize;
@@ -424,34 +448,31 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             IsBusy = false;
             OnPropertyChanged(nameof(HasPlan));
-            OnPropertyChanged(nameof(CanOptimize));
+            RefreshSelection();
         }
     }
 
     private OptimizationPlan? _plan;
 
     /// <summary>
-    /// Analyses every ticked bundle and shows all of their textures together, so
-    /// a batch is reviewed before it is written rather than taken on trust.
+    /// Works out plans for the ticked bundles that do not have one, and shows
+    /// every ticked bundle's textures together, so a batch is reviewed before it
+    /// is written rather than taken on trust.
     /// </summary>
+    /// <remarks>
+    /// Only the outstanding ones are analysed. On a real folder each bundle is
+    /// seconds of reading, so re-doing the ones already done because a different
+    /// mod was ticked is the difference between adding to a selection and
+    /// starting it again.
+    /// </remarks>
     public async Task AnalyseManyAsync(IReadOnlyList<ModNodeViewModel> targets)
     {
+        var outstanding = targets
+            .Where(t => t.Bundle is { } b && !_analysed.ContainsKey(b.Path))
+            .ToList();
+
         IsBusy = true;
         Progress = 0;
-        ClearBatch();
-        Textures.Clear();
-        Skipped.Clear();
-
-        // A single bundle may have been open before this; its plan must not be
-        // left behind for the totals or the button to fall back on.
-        _plan = null;
-        _bundle = null;
-
-        // Every bundle asked for, including any that turns out to be unreadable
-        // below — otherwise one that could not be opened would leave the ticks
-        // permanently disagreeing with the batch, retiring it immediately.
-        foreach (var target in targets)
-            if (target.Bundle is { } discovered) _analysed.Add(discovered.Path);
 
         var strategy = Strategy.Value;
         var collapse = CollapseSolidColours;
@@ -460,14 +481,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
         var mipMode = MipSelection.Value;
         var floor = StreamFloor.Value;
         var addMips = AddMips;
+        string? failure = null;
 
         try
         {
-            for (var i = 0; i < targets.Count; i++)
+            for (var i = 0; i < outstanding.Count; i++)
             {
-                var target = targets[i];
-                Progress = 100.0 * i / targets.Count;
-                ProgressText = S.AnalysingMany(i + 1, targets.Count, target.Name);
+                var target = outstanding[i];
+                Progress = 100.0 * i / outstanding.Count;
+                ProgressText = S.AnalysingMany(i + 1, outstanding.Count, target.Name);
 
                 var analysed = await Task.Run<(Bundle Bundle, OptimizationPlan Plan)?>(() =>
                 {
@@ -482,29 +504,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
                     return (Bundle: bundle, Plan: plan);
                 });
 
-                if (analysed is not { } entry) continue;
-
-                _batch.Add(entry);
-                foreach (var item in entry.Plan.Textures)
-                    Textures.Add(new TextureItemViewModel(item, RecalculateTotals, target.Name));
-                foreach (var skip in entry.Plan.Skipped)
-                    Skipped.Add(skip);
+                if (analysed is { } entry) _analysed[target.Bundle!.Path] = entry;
             }
-
-            CurrentSize = _batch.Sum(b => b.Plan.CurrentGpuSize);
-            CurrentFootprint = _batch.Sum(b => b.Plan.CurrentGpuFootprint);
-            DuplicateEntryCount = _batch.Sum(b => b.Plan.DuplicateEntryCount);
-            RedundantBytes = _batch.Sum(b => b.Plan.RedundantBytes);
-
-            Status = (HasWork
-                ? S.AnalysedMany(_batch.Count, Textures.Count, Skipped.Count)
-                : S.AnalysedNothing(_batch.Count)) + StreamWarning;
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException
                                       or NotSupportedException or UnauthorizedAccessException)
         {
-            ClearBatch();
-            Status = S.CouldNotOpen(ex.Message);
+            failure = ex.Message;
         }
         finally
         {
@@ -513,9 +519,60 @@ public sealed partial class MainWindowViewModel : ObservableObject
             ProgressText = "";
             BundlePath = null;
             OnPropertyChanged(nameof(BundleLabel));
-            RecalculateTotals();
+
+            // Whatever succeeded is shown, including anything that was already
+            // there — one unreadable bundle does not throw away the rest.
+            RebuildBatch();
+            if (failure is null) SayWhatIsOnScreen(); else Status = S.CouldNotOpen(failure);
             RefreshSelection();
         }
+    }
+
+    /// <summary>
+    /// Puts the plans for whatever is ticked on screen, in the order the tree
+    /// shows them.
+    /// </summary>
+    /// <remarks>
+    /// Rows are built afresh from the plans, and the ticks made against
+    /// individual textures survive it: those live on the plan item, not on the
+    /// row that shows it.
+    /// </remarks>
+    private void RebuildBatch()
+    {
+        ClearDisplay();
+
+        foreach (var node in CheckedBundles)
+        {
+            if (!_analysed.TryGetValue(node.Bundle!.Path, out var entry)) continue;
+
+            _batch.Add(entry);
+            foreach (var item in entry.Plan.Textures)
+                Textures.Add(new TextureItemViewModel(item, RecalculateTotals, node.Name));
+            foreach (var skip in entry.Plan.Skipped)
+                Skipped.Add(skip);
+        }
+
+        CurrentSize = _batch.Sum(b => b.Plan.CurrentGpuSize);
+        CurrentFootprint = _batch.Sum(b => b.Plan.CurrentGpuFootprint);
+        DuplicateEntryCount = _batch.Sum(b => b.Plan.DuplicateEntryCount);
+        RedundantBytes = _batch.Sum(b => b.Plan.RedundantBytes);
+        RecalculateTotals();
+    }
+
+    /// <summary>Says what the grid is showing and what is still owed an analysis.</summary>
+    private void SayWhatIsOnScreen()
+    {
+        var pending = Pending.Count;
+
+        Status = (_batch.Count, pending) switch
+        {
+            (0, 0) => S.NothingSelected,
+            (0, _) => S.SelectedNotAnalysed(pending),
+            (_, 0) => HasWork
+                ? S.AnalysedMany(_batch.Count, Textures.Count, Skipped.Count)
+                : S.AnalysedNothing(_batch.Count),
+            _ => S.AnalysedSomeOf(_batch.Count, pending),
+        } + StreamWarning;
     }
 
     /// <summary>
@@ -594,58 +651,54 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         finally
         {
-            IsBusy = false;
-            Progress = 0;
-            ProgressText = "";
+            var written = work.Select(w => w.Bundle.Path).ToHashSet(StringComparer.Ordinal);
 
             // The panel quotes what the scan measured, so without this it goes
             // on quoting what these bundles used to cost — the one figure the
             // whole exercise was about.
-            var written = work.Select(w => w.Bundle.Path).ToHashSet(StringComparer.Ordinal);
             foreach (var node in AllBundles)
                 if (written.Contains(node.Bundle!.Path)) node.Refresh();
 
-            ClearBatch();
-            Textures.Clear();
-            Skipped.Clear();
+            // These files are no longer the ones their plans describe.
+            foreach (var path in written) _analysed.Remove(path);
+
+            // Cleared while still busy, so that unticking them does not rebuild
+            // the screen and write over what the run has just reported.
             foreach (var bundle in AllBundles) bundle.IsChecked = false;
-            CurrentSize = 0;
-            CurrentFootprint = 0;
-            DuplicateEntryCount = 0;
-            RedundantBytes = 0;
+
+            IsBusy = false;
+            Progress = 0;
+            ProgressText = "";
+            ClearDisplay();
             RecalculateTotals();
             RefreshSelection();
         }
     }
 
-    /// <summary>Drops an analysed batch and what it was built from.</summary>
-    private void ClearBatch()
+    /// <summary>
+    /// Empties the grid and the totals over it, leaving whatever plan they were
+    /// drawn from alone.
+    /// </summary>
+    private void ClearGrid()
     {
         _batch.Clear();
-        _analysed.Clear();
-    }
-
-    /// <summary>
-    /// Takes an analysed batch off the screen as well as out of memory.
-    /// Anything that changes what a plan would say — a setting, or which
-    /// bundles are ticked — invalidates it, and everything it put on screen
-    /// goes with it: the grid, the totals and the sentence describing it all
-    /// belong to bundles that are no longer the ones in question. The button
-    /// goes back to offering an analysis rather than a write.
-    /// </summary>
-    private void RetireBatch()
-    {
-        if (!HasBatch) return;
-
-        ClearBatch();
         Textures.Clear();
         Skipped.Clear();
         CurrentSize = 0;
         CurrentFootprint = 0;
         DuplicateEntryCount = 0;
         RedundantBytes = 0;
-        Status = S.AnalysisRetired;
-        RecalculateTotals();
+    }
+
+    /// <summary>
+    /// The same, and forgets the single plan behind it too. The kept plans are
+    /// untouched: what is on screen and what is known are different questions.
+    /// </summary>
+    private void ClearDisplay()
+    {
+        ClearGrid();
+        _plan = null;
+        _bundle = null;
     }
 
     [RelayCommand]
@@ -692,14 +745,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
                 : S.WrittenButIssues(report.Issues.Count,
                                      string.Join("; ", report.Issues.Take(3).Select(i => i.Detail)));
 
-            // The bundle on disk has changed, so the plan no longer describes it.
-            Textures.Clear();
-            Skipped.Clear();
-            DuplicateEntryCount = 0;
-            RedundantBytes = 0;
-            CurrentFootprint = 0;
-            _plan = null;
-            _bundle = null;
+            // The bundle on disk has changed, so the plan no longer describes it
+            // and neither does the size the scan measured for it.
+            _analysed.Remove(_bundle.Path);
+            foreach (var node in AllBundles)
+                if (node.Bundle!.Path == _bundle.Path) node.Refresh();
+
+            ClearDisplay();
             RecalculateTotals();
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException)
@@ -711,7 +763,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             IsBusy = false;
             ProgressText = "";
             OnPropertyChanged(nameof(HasPlan));
-            OnPropertyChanged(nameof(CanOptimize));
+            RefreshSelection();
         }
     }
 
@@ -777,10 +829,15 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
     partial void OnCollapseSolidColoursChanged(bool value) => Replan();
 
+    /// <summary>
+    /// Sharing is decided when a plan is applied rather than when it is built,
+    /// so this needs no re-analysis — but it does need every plan told, kept
+    /// ones included, or one would go back on screen still set the old way.
+    /// </summary>
     partial void OnDeduplicateChanged(bool value)
     {
+        foreach (var (_, plan) in _analysed.Values) plan.Deduplicate = value;
         if (_plan is not null) _plan.Deduplicate = value;
-        foreach (var (_, plan) in _batch) plan.Deduplicate = value;
         RecalculateTotals();
     }
 
@@ -856,22 +913,28 @@ public sealed partial class MainWindowViewModel : ObservableObject
         Replan();
     }
 
-    /// <summary>Re-analyses the open bundle under the current settings.</summary>
+    /// <summary>Re-analyses under the current settings.</summary>
     private void Replan()
     {
-        if (_linking) return;
+        if (_linking || IsBusy) return;
 
-        // An analysed batch describes the settings it was analysed under, so a
-        // change to those settings retires it and the button offers a fresh
-        // analysis rather than writing something nobody looked at.
-        if (HasBatch && !IsBusy)
-        {
-            RetireBatch();
-            RefreshSelection();
-            return;
-        }
+        // A plan describes the settings it was built under, so a change to those
+        // retires every one of them — the ones being kept for later as much as
+        // the ones on screen. This is the one thing the keeping does not survive.
+        var hadPlans = _analysed.Count > 0;
+        _analysed.Clear();
 
-        if (BundlePath is not null && !IsBusy) _ = LoadAsync(BundlePath);
+        // The open bundle is re-analysed straight away, since it is one bundle
+        // and it is what is being looked at. A batch is not: several bundles is
+        // seconds to minutes, and asking for it is what the button is for.
+        if (BundlePath is not null) { _ = LoadAsync(BundlePath); return; }
+
+        if (!hadPlans) return;
+
+        ClearDisplay();
+        Status = S.AnalysisRetired;
+        RecalculateTotals();
+        RefreshSelection();
     }
 }
 

@@ -86,8 +86,22 @@ public static class S
       + "和一个个处理完全一样。已经优化过的、或者已经存在上一次备份的，会被报告并跳过。");
 
     public static string AnalysisRetired => T(
-        "Settings or selection changed, so that analysis no longer applies. Press Analyse again.",
-        "设置或所选内容已更改，之前的分析不再适用。请重新点击分析。");
+        "Settings changed, so that analysis no longer applies. Press Analyse again.",
+        "设置已更改，之前的分析不再适用。请重新点击分析。");
+
+    public static string NothingSelected => T(
+        "Nothing selected. Tick a mod to add it, or click one to see its plan.",
+        "未选择任何内容。勾选一个 mod 把它加进来，或者点一下查看它的处理方案。");
+
+    public static string SelectedNotAnalysed(int bundles) => T(
+        $"{bundles} selected, none analysed yet. Press Analyse to see what these settings would do.",
+        $"已选 {bundles} 个，还没有分析过。点击分析看看这些设置会做什么。");
+
+    public static string AnalysedSomeOf(int analysed, int pending) => T(
+        $"{analysed} bundle(s) shown below, {pending} not analysed yet. Press Analyse for the rest — "
+      + "the ones already done are not done again.",
+        $"下面是已分析的 {analysed} 个，还有 {pending} 个没有分析。点击分析处理其余的 —— "
+      + "已经分析过的不会重来一遍。");
 
     public static string BatchProgress(int done, int total, string name) =>
         T($"{done}/{total}  {name}", $"{done}/{total}  {name}");

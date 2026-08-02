@@ -34,32 +34,23 @@ Figures quoted here are measured on real bundles, not estimated.
     bundle each row came from and the totals covering the whole selection; only
     then does the button become Optimize. So a batch is reviewed before it is
     written, exactly as a single bundle is, and individual textures can still be
-    unticked across any of them. Changing a setting retires the analysis, since
-    the plans describe the settings they were built under. Writing backs up and
-    verifies each bundle in turn, and anything that would not shrink is counted
-    and left alone rather than forced.
-
-### Fixed
-
-- **A mod could be clicked into the half-ticked state**, where its options
-  stayed ticked and the mod looked chosen while nothing under it counted as
-  chosen. The tick box was three-state, which puts "some of these" into the
-  click cycle rather than leaving it as something a folder is told it is by its
-  children; a bundle, having nothing under it, could be parked there too.
-  Half-ticked is now shown and never asked for.
-- **An analysis outlived the selection it described.** Unticking the bundles
-  that had just been analysed left their textures in the grid, their totals in
-  the corner and the button reading Optimize — which would have written them.
-  Changing which bundles are ticked now retires the analysis exactly as
-  changing a setting does, and says so instead of leaving the previous sentence
-  standing.
-- **Opening a single bundle while a batch was analysed mixed the two**: the
-  grid showed the one bundle, the totals summed the batch against it, and
-  Optimize wrote the batch.
-- **The batch confirmation counted texture rows and called them bundles**, so
-  optimising two bundles holding five textures asked to rewrite five bundles.
-- **The mod list went on quoting what a bundle used to cost after rewriting
-  it**, since the sizes came from the scan.
+    unticked across any of them. Writing backs up and verifies each bundle in
+    turn, and anything that would not shrink is counted and left alone rather
+    than forced.
+  - **Plans are kept, so choosing is never a reason to read anything twice.**
+    Untick a mod and its rows leave the grid; tick it back and they return as
+    they were, per-texture ticks included. Tick something new and the button
+    offers to analyse only what is outstanding. On a real folder: four bundles
+    take 2.9 s, after which adding a fifth costs 156 ms rather than another 2.9
+    s, and unticking or reticking a mod costs 1–2 ms. Looking at a bundle on its
+    own counts too — tick it afterwards and it is already done. Changing a
+    setting is the one thing this does not survive, since a plan describes the
+    settings it was built under.
+  - The screen always shows what the button would write. Opening one bundle
+    takes a batch off the grid rather than leaving its totals summed against
+    that bundle's, and the half-ticked mark is something a mod is told it is by
+    its options, never something a click can ask for — a bundle, having no
+    options, is never in it at all.
 
 ## [0.1.2] — 2026-08-02
 

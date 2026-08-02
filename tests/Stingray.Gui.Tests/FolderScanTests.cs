@@ -290,41 +290,74 @@ public class FolderScanTests : IDisposable
     }
 
     /// <summary>
-    /// The analysis belongs to the bundles it was run over. Untick one and it
-    /// no longer describes what is chosen — so it goes, rather than sitting
-    /// there while the button offers to write bundles nobody has ticked.
+    /// The grid shows what is ticked. Untick one of two and its rows go, the
+    /// other's stay, and the totals become the one that is left — rather than
+    /// the whole thing being retired because one mod changed its mind.
     /// </summary>
     [Fact]
-    public async Task UntickingAnAnalysedBundleTakesItsPlanOffScreen()
+    public async Task UntickingOneBundleLeavesTheOthersOnScreen()
     {
-        AddMod(folders: ["R-36", "Shorty"]);
-        AddMod(folders: ["R-36", "Long boi"]);
-        AddMod(folders: "SFX");
+        AddMod(textures: 2, width: 64, folders: ["R-36", "Shorty"]);
+        AddMod(textures: 3, width: 64, folders: ["R-36", "Long boi"]);
 
         var vm = new MainWindowViewModel();
         await vm.ScanAsync(_root);
-        vm.Mods.Single(m => m.Name == "R-36").IsChecked = true;
+        var mod = vm.Mods.Single(m => m.Name == "R-36");
+        mod.IsChecked = true;
         await vm.AnalyseManyAsync(vm.CheckedBundles);
 
+        Assert.Equal(2, vm.AnalysedBundleCount);
+        Assert.Equal(5, vm.Textures.Count);
+        var both = vm.CurrentSize;
+
+        var dropped = mod.Children.First();
+        dropped.IsChecked = false;
+
+        Assert.Equal(1, vm.AnalysedBundleCount);
         Assert.True(vm.HasAnalysedBatch);
-        var analysed = vm.Status;
+        Assert.DoesNotContain(vm.Textures, t => t.ModName == dropped.Name);
+        Assert.NotEmpty(vm.Textures);
+        Assert.True(vm.CurrentSize < both);
 
-        vm.Mods.Single(m => m.Name == "R-36").Children.First().IsChecked = false;
-
-        Assert.False(vm.HasAnalysedBatch);
-        Assert.Empty(vm.Textures);
-        Assert.Empty(vm.Skipped);
-        Assert.Equal(0, vm.CurrentSize);
-        Assert.NotEqual(analysed, vm.Status);
-
-        // And the button offers the analysis the remaining tick now needs.
-        Assert.True(vm.WouldAnalyse);
-        Assert.Single(vm.CheckedBundles);
+        // Nothing is owed an analysis, so the button still offers the write.
+        Assert.False(vm.WouldAnalyse);
     }
 
-    /// <summary>Ticking more is the same problem from the other side.</summary>
+    /// <summary>
+    /// And ticking it back brings the same plan with it. The whole point of
+    /// keeping them: choosing is not a reason to do the reading again.
+    /// </summary>
     [Fact]
-    public async Task TickingAnotherBundleAfterAnAnalysisRetiresIt()
+    public async Task RetickingABundleBringsItsPlanBackWithoutAnalysingAgain()
+    {
+        AddMod(folders: ["R-36", "Shorty"]);
+        AddMod(folders: ["R-36", "Long boi"]);
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        var mod = vm.Mods.Single(m => m.Name == "R-36");
+        mod.IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        var dropped = mod.Children.First();
+        var itemBefore = vm.Textures.First(t => t.ModName == dropped.Name).Item;
+
+        dropped.IsChecked = false;
+        dropped.IsChecked = true;
+
+        Assert.Equal(2, vm.AnalysedBundleCount);
+        Assert.False(vm.WouldAnalyse);
+        Assert.False(vm.IsBusy);
+        Assert.Same(itemBefore, vm.Textures.First(t => t.ModName == dropped.Name).Item);
+    }
+
+    /// <summary>
+    /// Ticking something new leaves what is already analysed on screen and
+    /// offers to analyse only the newcomer — the count on the button is what is
+    /// outstanding, not what is chosen.
+    /// </summary>
+    [Fact]
+    public async Task TickingAnotherBundleOffersToAnalyseOnlyThatOne()
     {
         AddMod(folders: "Alpha");
         AddMod(folders: "Beta");
@@ -333,13 +366,101 @@ public class FolderScanTests : IDisposable
         await vm.ScanAsync(_root);
         vm.Mods.Single(m => m.Name == "Alpha").IsChecked = true;
         await vm.AnalyseManyAsync(vm.CheckedBundles);
-        Assert.True(vm.HasAnalysedBatch);
+        var alphaItem = vm.Textures.Single().Item;
 
         vm.Mods.Single(m => m.Name == "Beta").IsChecked = true;
 
-        Assert.False(vm.HasAnalysedBatch);
+        Assert.True(vm.HasAnalysedBatch);
+        Assert.Same(alphaItem, vm.Textures.Single().Item);
         Assert.True(vm.WouldAnalyse);
+        Assert.Contains("1", vm.OptimizeLabel);
+
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        // Both are on screen, and Alpha's plan is the very one from before.
+        Assert.Equal(2, vm.AnalysedBundleCount);
+        Assert.False(vm.WouldAnalyse);
+        Assert.Same(alphaItem, vm.Textures.First(t => t.ModName == "Alpha").Item);
+    }
+
+    /// <summary>
+    /// A texture unticked in the grid stays unticked when its bundle goes off
+    /// screen and comes back: that choice is part of the plan, not of the row.
+    /// </summary>
+    [Fact]
+    public async Task ATextureUntickedInTheGridStaysUntickedAcrossASelectionChange()
+    {
+        AddMod(textures: 2, width: 64, folders: "Alpha");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        var alpha = vm.Mods.Single(m => m.Name == "Alpha");
+        alpha.IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        Assert.Equal(2, vm.Textures.Count);
+        var name = vm.Textures[0].Name;
+        vm.Textures[0].Include = false;
+        var withOneOut = vm.PredictedSize;
+
+        alpha.IsChecked = false;
+        alpha.IsChecked = true;
+
+        Assert.False(vm.Textures.Single(t => t.Name == name).Include);
+        Assert.Equal(withOneOut, vm.PredictedSize);
+    }
+
+    /// <summary>
+    /// Peeking at a bundle costs an analysis, and ticking it afterwards must not
+    /// cost a second one — it is the same bundle under the same settings.
+    /// </summary>
+    [Fact]
+    public async Task LookingAtABundleThenTickingItDoesNotAnalyseItTwice()
+    {
+        AddMod(folders: "Alpha");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+
+        var alpha = vm.Mods.Single(m => m.Name == "Alpha");
+        vm.SelectedMod = alpha;
+        await SettleAsync(vm);
+        var item = vm.Textures.Single().Item;
+
+        alpha.IsChecked = true;
+
+        Assert.False(vm.WouldAnalyse);
+        Assert.True(vm.HasAnalysedBatch);
+        Assert.Same(item, vm.Textures.Single().Item);
+    }
+
+    /// <summary>
+    /// Settings are the one thing the keeping does not survive: a plan describes
+    /// the settings it was built under, so all of them go, kept ones included.
+    /// </summary>
+    [Fact]
+    public async Task ChangingASettingRetiresEvenThePlansBeingKept()
+    {
+        AddMod(folders: "Alpha");
+        AddMod(folders: "Beta");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+        foreach (var node in vm.Mods) node.IsChecked = true;
+        await vm.AnalyseManyAsync(vm.CheckedBundles);
+
+        vm.Mods.Single(m => m.Name == "Beta").IsChecked = false;
+        vm.Strategy = vm.Strategies.Single(s => s.Value == OptimizationStrategy.MaximumQuality);
+
+        Assert.False(vm.HasAnalysedBatch);
+        Assert.Empty(vm.Textures);
+
+        // Including the one that was only being kept, not shown.
+        vm.Mods.Single(m => m.Name == "Beta").IsChecked = true;
         Assert.Equal(2, vm.CheckedBundles.Count);
+        Assert.Empty(vm.Textures);
+        Assert.True(vm.WouldAnalyse);
+        Assert.Contains("2", vm.OptimizeLabel);
     }
 
     /// <summary>But leaving the ticks alone leaves the analysis alone.</summary>
@@ -361,21 +482,23 @@ public class FolderScanTests : IDisposable
     }
 
     /// <summary>
-    /// Opening one bundle replaces the grid, so a batch cannot outlive it: the
-    /// totals would sum the batch against this bundle's size, and the button
-    /// would still write the batch while the screen showed something else.
+    /// Opening one bundle replaces the grid, so a batch cannot stay on screen
+    /// with it: the totals would sum the batch against this bundle's size, and
+    /// the button would write the batch while the screen showed something else.
+    /// The plans behind it are kept, so a tick puts them straight back.
     /// </summary>
     [Fact]
-    public async Task OpeningOneBundleRetiresAnAnalysedBatch()
+    public async Task OpeningOneBundleTakesAnAnalysedBatchOffScreen()
     {
         AddMod(folders: "Alpha");
         AddMod(width: 128, folders: "Beta");
 
         var vm = new MainWindowViewModel();
         await vm.ScanAsync(_root);
-        vm.Mods.Single(m => m.Name == "Alpha").IsChecked = true;
+        var alpha = vm.Mods.Single(m => m.Name == "Alpha");
+        alpha.IsChecked = true;
         await vm.AnalyseManyAsync(vm.CheckedBundles);
-        Assert.True(vm.HasAnalysedBatch);
+        var kept = vm.Textures.Single().Item;
 
         var beta = vm.Mods.Single(m => m.Name == "Beta");
         vm.SelectedMod = beta;
@@ -387,6 +510,11 @@ public class FolderScanTests : IDisposable
         // The totals are this bundle's alone, not this bundle's against a batch.
         Assert.True(vm.CurrentSize > 0);
         Assert.True(vm.PredictedSize < vm.CurrentSize);
+
+        // And Alpha's plan was kept, so a tick anywhere brings it back as it was.
+        beta.IsChecked = true;
+        Assert.False(vm.WouldAnalyse);
+        Assert.Same(kept, vm.Textures.First(t => t.ModName == "Alpha").Item);
     }
 
     /// <summary>

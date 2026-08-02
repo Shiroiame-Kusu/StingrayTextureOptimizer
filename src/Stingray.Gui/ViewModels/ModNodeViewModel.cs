@@ -95,10 +95,46 @@ public sealed partial class ModNodeViewModel : ObservableObject
         // A tick on a folder is a tick on everything under it, which is what
         // makes selecting a whole mod one click rather than one per option.
         if (!_updatingFromChild && value is { } state)
-            foreach (var child in Children)
-                child.IsChecked = state;
+        {
+            _propagatingDown = true;
+            try
+            {
+                foreach (var child in Children) child.IsChecked = state;
+            }
+            finally
+            {
+                _propagatingDown = false;
+            }
+        }
 
         Parent?.RefreshFromChildren();
+    }
+
+    /// <summary>True while this line is ticking everything underneath it.</summary>
+    private bool _propagatingDown;
+
+    /// <summary>
+    /// Whether this change only repeats one being reported elsewhere: a step of
+    /// a folder ticking its way down, or a folder's box catching up with what
+    /// its children now say.
+    /// </summary>
+    /// <remarks>
+    /// One click on a mod changes every line under it and every line above it.
+    /// Acting on all of them rebuilds the screen once per bundle in the folder —
+    /// on the largest one here, eighty-four times for one click. The change that
+    /// matters is reported on its own; these are its shadow.
+    /// </remarks>
+    internal bool IsAnEcho
+    {
+        get
+        {
+            if (_updatingFromChild) return true;
+
+            for (var node = this; node is not null; node = node.Parent)
+                if (node._propagatingDown) return true;
+
+            return false;
+        }
     }
 
     /// <summary>
