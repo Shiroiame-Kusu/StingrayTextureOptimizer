@@ -154,7 +154,7 @@ jobs:
           find out/cli out/gui -maxdepth 1 -type f \
             ! -name '*.pdb' ! -name '*.dbg' ! -name '*.dwarf' \
             -exec cp {} "$stage/" \;
-          cp LICENSE README.md CHANGELOG.md "$stage/"
+          cp LICENSE README.md README.zh-CN.md CHANGELOG.md "$stage/"
 
           # The publish already carries the shim when it was built, but copy it
           # explicitly so a missed copy cannot silently drop the fast encoder,

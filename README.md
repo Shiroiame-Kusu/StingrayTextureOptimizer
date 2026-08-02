@@ -1,5 +1,7 @@
 # Stingray Texture Optimizer
 
+**English** | [简体中文](README.zh-CN.md)
+
 > I made this app because some mods have `gpu_resources` files that are already
 > 500+ MB, and loading them into the game can eat up roughly another 0.5 GB of
 > VRAM.
