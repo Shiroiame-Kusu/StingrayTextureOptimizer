@@ -89,10 +89,22 @@ If you installed the mod rather than made it, those files are wherever your mod
 manager keeps them — one folder per mod, each holding that trio of files.
 
 **Or press Open folder… and let it find them.** Point it at the folder your mod
-manager keeps mods in and it searches everything underneath, listing one entry
-per bundle with what each costs, biggest first. Click one to see its plan.
+manager keeps mods in and it searches everything underneath.
 
 ![Scanning a mod manager's folder](docs/images/04-scan.png)
+
+The list is the folder tree, because that is the only structure the files carry.
+A mod that ships variants keeps them in folders under itself, so *Long boi* and
+*Shorty* show up beneath the mod they belong to rather than as two unexplained
+names in a flat list. Each line carries what it costs; a mod with one bundle is
+shown as one line rather than a folder you have to open.
+
+Click a bundle to see its plan, as if you had opened it directly. **Or tick
+several and press Optimize to do them all**, one after another with the settings
+at the top — ticking a mod ticks everything under it. There is no plan to review
+first, because several bundles have no single plan between them; what stands in
+for it is that each one is still backed up before it is written and verified
+after, and anything that would not shrink is reported and left alone.
 
 Any `backup` folder is skipped, including the ones this tool writes — otherwise
 every mod you had already optimised would appear twice, once as it is and once

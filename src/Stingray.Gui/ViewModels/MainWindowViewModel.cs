@@ -19,22 +19,53 @@ public sealed partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<TextureItemViewModel> Textures { get; } = [];
     public ObservableCollection<SkippedTexture> Skipped { get; } = [];
 
-    /// <summary>Bundles found by scanning a folder, largest first.</summary>
-    public ObservableCollection<DiscoveredModViewModel> Mods { get; } = [];
+    /// <summary>The folder tree a scan found, mirroring how the mods sit on disk.</summary>
+    public ObservableCollection<ModNodeViewModel> Mods { get; } = [];
 
     public bool HasMods => Mods.Count > 0;
 
-    /// <summary>
-    /// The row whose bundle is open. Setting it loads that bundle, which is what
-    /// makes the list behave like a list rather than a report.
-    /// </summary>
-    [ObservableProperty] private DiscoveredModViewModel? _selectedMod;
+    /// <summary>Every bundle in the tree, in the order it is shown.</summary>
+    private IEnumerable<ModNodeViewModel> AllBundles => Mods.SelectMany(m => m.Bundles);
 
-    partial void OnSelectedModChanged(DiscoveredModViewModel? value)
+    /// <summary>The bundles ticked for optimising.</summary>
+    public IReadOnlyList<ModNodeViewModel> CheckedBundles =>
+        [.. AllBundles.Where(b => b.IsChecked == true)];
+
+    public bool HasCheckedBundles => CheckedBundles.Count > 0;
+
+    public string SelectionSummary => CheckedBundles is { Count: > 0 } checkedBundles
+        ? S.SelectedForOptimising(checkedBundles.Count,
+                                  Format.Bytes(checkedBundles.Sum(b => b.GpuSize)))
+        : string.Empty;
+
+    /// <summary>
+    /// Optimising several at once cannot show a plan first, so the button says
+    /// how many it is about to touch rather than pretending otherwise.
+    /// </summary>
+    public string OptimizeLabel =>
+        CheckedBundles.Count > 1 ? S.OptimizeSelected(CheckedBundles.Count) : S.Optimize;
+
+    /// <summary>Ticking anything changes what Optimize would do, so it has to know.</summary>
+    public void RefreshSelection()
     {
-        if (value is null || IsBusy) return;
-        foreach (var mod in Mods) mod.IsOpen = ReferenceEquals(mod, value);
-        _ = LoadAsync(value.Path);
+        OnPropertyChanged(nameof(CheckedBundles));
+        OnPropertyChanged(nameof(HasCheckedBundles));
+        OnPropertyChanged(nameof(SelectionSummary));
+        OnPropertyChanged(nameof(OptimizeLabel));
+        OnPropertyChanged(nameof(CanOptimize));
+    }
+
+    /// <summary>
+    /// The line whose bundle is open. Selecting a folder shows nothing: there is
+    /// no single plan for a folder, which is what the tick boxes are for.
+    /// </summary>
+    [ObservableProperty] private ModNodeViewModel? _selectedMod;
+
+    partial void OnSelectedModChanged(ModNodeViewModel? value)
+    {
+        if (value is null || !value.IsBundle || IsBusy) return;
+        foreach (var bundle in AllBundles) bundle.IsOpen = ReferenceEquals(bundle, value);
+        _ = LoadAsync(value.Bundle!.Path);
     }
 
     /// <summary>
@@ -52,9 +83,8 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             var found = await Task.Run(() => BundleDiscovery.Scan(folder));
 
-            var number = 1;
-            foreach (var bundle in found)
-                Mods.Add(new DiscoveredModViewModel(bundle, number++));
+            foreach (var node in ModNodeViewModel.Build(found)) Mods.Add(node);
+            Track(Mods);
 
             Status = found.Count == 0
                 ? S.FoundNothing(folder)
@@ -69,7 +99,20 @@ public sealed partial class MainWindowViewModel : ObservableObject
         {
             IsBusy = false;
             OnPropertyChanged(nameof(HasMods));
-            OnPropertyChanged(nameof(CanOptimize));
+            RefreshSelection();
+        }
+    }
+
+    /// <summary>Subscribes every node in the tree, so a tick anywhere is noticed.</summary>
+    private void Track(IEnumerable<ModNodeViewModel> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            node.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName == nameof(ModNodeViewModel.IsChecked)) RefreshSelection();
+            };
+            Track(node.Children);
         }
     }
 
@@ -223,7 +266,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
         _plan is not null
         && (PredictedSize < CurrentSize || PredictedFootprint < CurrentFootprint);
 
-    public bool CanOptimize => !IsBusy && HasWork;
+    public bool CanOptimize => !IsBusy && (HasWork || CheckedBundles.Count > 1);
 
     public string SavingSummary => CurrentSize == 0
         ? string.Empty
@@ -310,6 +353,121 @@ public sealed partial class MainWindowViewModel : ObservableObject
     }
 
     private OptimizationPlan? _plan;
+
+    /// <summary>
+    /// Optimises every ticked bundle in turn, with the settings on screen.
+    /// </summary>
+    /// <remarks>
+    /// There is no plan to review first, because several bundles have no single
+    /// plan between them. What keeps that honest is that every bundle is backed
+    /// up before it is written and verified after, exactly as one at a time is —
+    /// and anything that would not shrink, or that already holds a backup from a
+    /// previous run, is left alone and counted rather than forced.
+    /// </remarks>
+    public async Task OptimizeManyAsync(IReadOnlyList<ModNodeViewModel> targets)
+    {
+        IsBusy = true;
+        Progress = 0;
+
+        var optimised = 0;
+        var skipped = 0;
+        var failed = 0;
+        long saved = 0;
+
+        var settings = new EncodeOptions
+        {
+            Quality = Quality.Value,
+            ThreadCount = ThreadCount,
+            Backend = Encoder.Value,
+        };
+        var strategy = Strategy.Value;
+        var collapse = CollapseSolidColours;
+        var dedup = Deduplicate;
+        var cap = SizeCap.Value;
+        var mips = MipSelection.Value;
+        var floor = StreamFloor.Value;
+        var addMips = AddMips;
+
+        try
+        {
+            for (var i = 0; i < targets.Count; i++)
+            {
+                var target = targets[i];
+                Progress = 100.0 * i / targets.Count;
+                ProgressText = S.BatchProgress(i + 1, targets.Count, target.Name);
+
+                var outcome = await Task.Run(() =>
+                {
+                    var bundle = Bundle.Load(target.Bundle!.Path);
+                    if (!bundle.HasGpuResources) return (Result: 0, Saved: 0L);
+
+                    using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+                    var plan = OptimizationPlan.Build(bundle, gpu, strategy, collapse,
+                                                      maxDimension: cap, mipMode: mips,
+                                                      streamFloor: floor, generateMips: addMips);
+                    plan.Deduplicate = dedup;
+
+                    // Same test the single-bundle path uses: no saving, no rewrite.
+                    if (plan.PredictedGpuSize >= plan.CurrentGpuSize
+                        && plan.PredictedGpuFootprint >= plan.CurrentGpuFootprint)
+                        return (Result: 0, Saved: 0L);
+
+                    var backupDirectory = Path.Combine(
+                        Path.GetDirectoryName(bundle.Path) ?? ".", "backup");
+                    BundleOptimizer.CreateBackup(bundle, backupDirectory);
+
+                    var result = BundleOptimizer.Apply(
+                        plan, gpu, bundle.Path, bundle.GpuResourcePath, settings,
+                        deduplicate: dedup, outputStreamPath: bundle.StreamPath);
+
+                    var report = BundleVerifier.Verify(
+                        bundle.Path,
+                        Path.Combine(backupDirectory, Path.GetFileName(bundle.Path)));
+
+                    return (Result: report.Passed ? 1 : -1, result.Saved);
+                });
+
+                switch (outcome.Result)
+                {
+                    case 1: optimised++; saved += outcome.Saved; break;
+                    case 0: skipped++; break;
+                    default: failed++; break;
+                }
+
+                target.IsChecked = false;
+            }
+        }
+        catch (Exception ex) when (ex is IOException or InvalidDataException
+                                      or NotSupportedException or UnauthorizedAccessException)
+        {
+            // A backup that already exists lands here, which is the usual reason
+            // a run stops early. What finished still finished.
+            failed++;
+            Status = S.Failed(ex.Message);
+        }
+        finally
+        {
+            IsBusy = false;
+            Progress = 0;
+            ProgressText = "";
+
+            if (Status.Length == 0 || failed == 0 || optimised > 0)
+                Status = S.BatchDone(optimised, skipped, failed, Format.Bytes(saved));
+
+            Textures.Clear();
+            Skipped.Clear();
+            _plan = null;
+            _bundle = null;
+            BundlePath = null;
+            OnPropertyChanged(nameof(BundleLabel));
+            CurrentSize = 0;
+            CurrentFootprint = 0;
+            DuplicateEntryCount = 0;
+            RedundantBytes = 0;
+            RecalculateTotals();
+            RefreshSelection();
+        }
+    }
 
     [RelayCommand]
     private async Task OptimizeAsync()

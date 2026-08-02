@@ -56,9 +56,28 @@ public partial class MainWindow : Window
 
     private async void OnOptimizeClicked(object? sender, RoutedEventArgs e)
     {
+        if (_viewModel.CheckedBundles.Count > 1)
+        {
+            await OptimizeManyAsync();
+            return;
+        }
+
         var confirm = new ConfirmWindow(S.ConfirmHeading, S.ConfirmBody);
 
         if (await confirm.ShowDialog<bool>(this))
             await _viewModel.OptimizeCommand.ExecuteAsync(null);
+    }
+
+    /// <summary>
+    /// Several bundles at once. Deliberately a different dialog: there is no plan
+    /// on screen for these, so the confirmation has to say what will happen.
+    /// </summary>
+    private async Task OptimizeManyAsync()
+    {
+        var targets = _viewModel.CheckedBundles;
+        var confirm = new ConfirmWindow(S.ConfirmBatchHeading(targets.Count), S.ConfirmBatchBody);
+
+        if (await confirm.ShowDialog<bool>(this))
+            await _viewModel.OptimizeManyAsync(targets);
     }
 }

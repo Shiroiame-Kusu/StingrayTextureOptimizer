@@ -74,7 +74,18 @@ internal static class Screenshot
         }
 
         if (ScanPath is not null)
+        {
             await viewModel.ScanAsync(ScanPath);
+
+            // Open the first mod that has options, so the picture shows the
+            // structure rather than a column of folded-up names.
+            foreach (var mod in viewModel.Mods)
+            {
+                if (mod.Children.Count == 0) continue;
+                mod.IsExpanded = true;
+                break;
+            }
+        }
 
         if (BundlePath is not null)
             await viewModel.LoadAsync(BundlePath);

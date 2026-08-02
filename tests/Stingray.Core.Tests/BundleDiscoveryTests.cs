@@ -111,17 +111,39 @@ public class BundleDiscoveryTests : IDisposable
         Assert.Empty(BundleDiscovery.Scan(_root));
     }
 
-    /// <summary>Biggest first: size is what decides whether a mod is worth opening.</summary>
+    /// <summary>
+    /// Ordered by where they sit, not by size: a mod's options have to stay with
+    /// the mod, or a list of two hundred bundles cannot be read at all.
+    /// </summary>
     [Fact]
-    public void TheLargestBundleComesFirst()
+    public void TheOrderFollowsTheFolderTree()
     {
-        AddMod("Small", width: 16);
-        AddMod("Large", width: 256);
+        AddMod("Shorty", extraPath: ["R-36"]);
+        AddMod("Long boi", extraPath: ["R-36"]);
+        AddMod("Alpha");
 
         var found = BundleDiscovery.Scan(_root);
 
-        Assert.Equal("Large", found[0].ModName);
-        Assert.True(found[0].GpuSize > found[1].GpuSize);
+        Assert.Equal(new[] { "Alpha", "Long boi", "Shorty" },
+                     found.Select(f => f.ModName));
+    }
+
+    /// <summary>
+    /// A mod's variants live in folders under it, which is the only thing that
+    /// says "Long boi" is an option of R-36 rather than a mod of its own.
+    /// </summary>
+    [Fact]
+    public void NestedFoldersAreReported()
+    {
+        AddMod("Long boi", extraPath: ["R-36"]);
+        AddMod("Loose");
+
+        var found = BundleDiscovery.Scan(_root);
+
+        Assert.Equal(new[] { "R-36", "Long boi" },
+                     found.Single(f => f.ModName == "Long boi").RelativeFolders);
+        Assert.Equal(new[] { "Loose" },
+                     found.Single(f => f.ModName == "Loose").RelativeFolders);
     }
 
     /// <summary>A bundle loose in the scanned folder is named after itself.</summary>
@@ -136,7 +158,9 @@ public class BundleDiscoveryTests : IDisposable
             File.Copy(file, Path.Combine(_root, Path.GetFileName(file)));
         fixture.Dispose();
 
-        Assert.Equal("test.patch_0", Assert.Single(BundleDiscovery.Scan(_root)).ModName);
+        var found = Assert.Single(BundleDiscovery.Scan(_root));
+        Assert.Equal("test.patch_0", found.ModName);
+        Assert.Empty(found.RelativeFolders);
     }
 
     [Fact]

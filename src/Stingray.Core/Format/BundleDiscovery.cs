@@ -21,6 +21,14 @@ public sealed record DiscoveredBundle
     /// <summary>File name of the bundle, which distinguishes several in one mod.</summary>
     public string FileName => System.IO.Path.GetFileName(Path);
 
+    /// <summary>
+    /// Folders between the scanned root and this bundle, outermost first, empty
+    /// when it sits directly in the root. Mods package their variants as nested
+    /// folders, so this is what says a bundle is an option of something rather
+    /// than a mod in its own right.
+    /// </summary>
+    public required IReadOnlyList<string> RelativeFolders { get; init; }
+
     /// <summary>Size of the <c>.gpu_resources</c> companion — what there is to save.</summary>
     public required long GpuSize { get; init; }
 
@@ -42,8 +50,8 @@ public static class BundleDiscovery
     public const string BackupDirectoryName = "backup";
 
     /// <summary>
-    /// Walks <paramref name="root"/> and returns every bundle under it, largest
-    /// first, since size is what decides whether a mod is worth touching.
+    /// Walks <paramref name="root"/> and returns every bundle under it, in the
+    /// order the folders sit on disk, so a mod's options stay with the mod.
     /// </summary>
     /// <remarks>
     /// A file counts as a bundle when it has a <c>.gpu_resources</c> sibling and
@@ -101,8 +109,11 @@ public static class BundleDiscovery
             }
         }
 
-        return [.. found.OrderByDescending(b => b.GpuSize)
-                        .ThenBy(b => b.ModName, StringComparer.OrdinalIgnoreCase)
+        // Ordered by where they sit rather than by size: a mod's options belong
+        // next to the mod, and a list that reads like the folder tree is one you
+        // can find things in.
+        return [.. found.OrderBy(b => string.Join('/', b.RelativeFolders),
+                                 StringComparer.OrdinalIgnoreCase)
                         .ThenBy(b => b.FileName, StringComparer.OrdinalIgnoreCase)];
     }
 
@@ -135,6 +146,7 @@ public static class BundleDiscovery
             {
                 Path = path,
                 ModName = modName,
+                RelativeFolders = FoldersBetween(root, directory),
                 GpuSize = gpu.Exists ? gpu.Length : 0,
                 StreamSize = stream.Exists ? stream.Length : 0,
             };
@@ -143,6 +155,21 @@ public static class BundleDiscovery
         {
             return null;
         }
+    }
+
+    /// <summary>Folder names from <paramref name="root"/> down to <paramref name="directory"/>.</summary>
+    private static IReadOnlyList<string> FoldersBetween(string root, string? directory)
+    {
+        if (directory is null) return [];
+
+        var full = System.IO.Path.GetFullPath(directory);
+        var from = System.IO.Path.GetFullPath(root);
+        if (string.Equals(full, from, StringComparison.Ordinal)) return [];
+
+        var relative = System.IO.Path.GetRelativePath(from, full);
+        return [.. relative.Split(System.IO.Path.DirectorySeparatorChar,
+                                  System.IO.Path.AltDirectorySeparatorChar,
+                                  StringSplitOptions.RemoveEmptyEntries)];
     }
 
     private static bool HasBundleMagic(string path)

@@ -24,6 +24,15 @@ Figures quoted here are measured on real bundles, not estimated.
     already optimised does not appear twice — once as it is and once as it was.
     Verified against a real folder: 223 `.gpu_resources` files, 10 of them
     inside backups, 213 listed.
+  - The list is the folder tree, so a mod's variants sit beneath the mod they
+    belong to. A flat list could not say that "Long boi" and "Shorty" are two
+    options of one mod. A mod holding a single bundle is shown as one line
+    rather than a folder to open.
+  - **Several bundles can be optimised together.** Tick them — ticking a mod
+    ticks its variants — and Optimize runs them in turn with the settings on
+    screen. Each is backed up and verified exactly as one at a time is, and
+    anything that would not shrink, or that already holds a backup from a
+    previous run, is counted and left alone rather than forced.
 
 ## [0.1.2] — 2026-08-02
 
