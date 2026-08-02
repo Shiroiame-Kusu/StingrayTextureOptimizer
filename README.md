@@ -13,8 +13,10 @@
 > As soon as I enter the game, my VRAM usage goes over the limit, and the game
 > immediately starts stuttering.
 >
-> So I used AI to help me build this app. That said, all the testing and code
-> review are still done manually by me.
+> I designed the file format parsing and implemented the core functionality
+> myself. AI is simply a powerful tool. The only thing I really used it for was
+> building the GUI, and I personally reviewed every single line of code it
+> generated before using it.
 >
 > I'm lazy, not stupid. 😎
 >
