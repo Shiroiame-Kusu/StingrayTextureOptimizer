@@ -14,6 +14,10 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [0.1.2] — 2026-08-02
+
 ### Added
 
 - **The GUI speaks Simplified Chinese**, and picks its language from the system
@@ -142,6 +146,7 @@ Measured on two real mods:
 | 521 MiB, already BC7 | 114.9 MiB | 303.9 MiB |
 | the same, with a 2048 cap | 54.9 MiB | 111.9 MiB |
 
-[Unreleased]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/releases/tag/v0.1.0
