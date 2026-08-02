@@ -15,9 +15,20 @@ env:
   DOTNET_CLI_TELEMETRY_OPTOUT: true
 
 jobs:
+  # Windows is not a formality here. Repacking renames a temporary over a
+  # .gpu_resources that is still open for reading, which Unix allows
+  # unconditionally and Windows allows only because the reader asks for
+  # FileShare.Delete. The tests already do exactly that — see
+  # DeduplicationTests, which calls Apply inside the using that holds the
+  # reader — so the coverage existed and simply never ran anywhere it could
+  # fail.
   test:
-    name: Test
-    runs-on: ubuntu-latest
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
@@ -28,7 +39,13 @@ jobs:
       # developer machine ends up testing the native encoder and, until now, how
       # CI silently did not. The row it unlocks covers the sub-4x4 mip levels
       # CMP_Core rejects, which is a case that has already gone wrong once.
+      #
+      # Linux only: every test that needs the shim already skips when it is
+      # absent, so Windows runs the whole managed suite without it rather than
+      # having its cmake invocation stand between us and the file-locking
+      # coverage that is the reason it is here.
       - name: Check out Compressonator (CMP_Core)
+        if: runner.os == 'Linux'
         uses: actions/checkout@v4
         with:
           repository: GPUOpen-Tools/compressonator
@@ -40,6 +57,7 @@ jobs:
           sparse-checkout-cone-mode: false
 
       - name: Build native encoder shim
+        if: runner.os == 'Linux'
         run: |
           cmake -S native -B build/native -DCMAKE_BUILD_TYPE=Release \
             -DCOMPRESSONATOR_SOURCE="$GITHUB_WORKSPACE/external/compressonator"
