@@ -180,23 +180,29 @@ public sealed partial class ModNodeViewModel : ObservableObject
     /// still quotes what it used to cost — the one number the whole exercise
     /// was about, left saying the thing that is no longer true.
     /// </remarks>
-    public void Refresh()
+    /// <returns>Whether anything about it had in fact changed.</returns>
+    public bool Refresh()
     {
-        if (Bundle is not { } bundle) return;
+        if (Bundle is not { } bundle) return false;
 
         var gpu = new FileInfo(bundle.Path + ".gpu_resources");
         var stream = new FileInfo(bundle.Path + ".stream");
-        Bundle = bundle with
-        {
-            GpuSize = gpu.Exists ? gpu.Length : 0,
-            StreamSize = stream.Exists ? stream.Length : 0,
-        };
+        var gpuSize = gpu.Exists ? gpu.Length : 0;
+        var streamSize = stream.Exists ? stream.Length : 0;
+
+        // Cheap enough to ask every line in the tree, which is what makes it
+        // safe to stop deciding which lines were written to.
+        if (gpuSize == bundle.GpuSize && streamSize == bundle.StreamSize) return false;
+
+        Bundle = bundle with { GpuSize = gpuSize, StreamSize = streamSize };
 
         for (var node = this; node is not null; node = node.Parent)
         {
             node.OnPropertyChanged(nameof(GpuSize));
             node.OnPropertyChanged(nameof(Detail));
         }
+
+        return true;
     }
 
     /// <summary>Builds the folder tree the scan implies.</summary>

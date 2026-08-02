@@ -3,6 +3,8 @@
 
 using Stingray.Core.Dds;
 using Stingray.Core.Format;
+using Stingray.Core.Optimization;
+using Stingray.Core.Textures;
 using Xunit;
 
 namespace Stingray.Core.Tests;
@@ -161,6 +163,94 @@ public class BundleDiscoveryTests : IDisposable
         var found = Assert.Single(BundleDiscovery.Scan(_root));
         Assert.Equal("test.patch_0", found.ModName);
         Assert.Empty(found.RelativeFolders);
+    }
+
+    /// <summary>
+    /// A bundle that cannot be read is reported rather than dropped. On Windows
+    /// the usual cause is another process holding it open — the game, or a mod
+    /// manager — and a folder that quietly lists fewer mods than it holds sends
+    /// you looking for the wrong problem.
+    /// </summary>
+    [Fact]
+    public void ABundleThatCannotBeReadIsReportedRatherThanDropped()
+    {
+        AddMod("Readable");
+        var locked = AddMod("Locked");
+
+        // Two ways to be unopenable, one per platform: a share-exclusive handle
+        // is what another process holding the file looks like on Windows, and
+        // Unix has no such thing, so permissions stand in for it there.
+        FileStream? hold = null;
+        if (OperatingSystem.IsWindows())
+            hold = new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None);
+        else
+            File.SetUnixFileMode(locked, UnixFileMode.None);
+
+        try
+        {
+            var found = BundleDiscovery.Scan(_root, out var unreadable);
+
+            Assert.Equal("Readable", Assert.Single(found).ModName);
+            Assert.Contains("Locked", Assert.Single(unreadable));
+        }
+        finally
+        {
+            hold?.Dispose();
+            if (!OperatingSystem.IsWindows())
+                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+    }
+
+    /// <summary>
+    /// Windows only lets a process past 260 characters when it has opted in, and
+    /// nothing here had ever been run against a path that long. The whole round
+    /// trip: find it, read it, rewrite it, verify it.
+    /// </summary>
+    [Fact]
+    public void ALongPathIsScannedAndRewrittenLikeAnyOther()
+    {
+        // Deep rather than one enormous name: individual components are capped
+        // at 255 on both platforms, and it is the total that matters.
+        var segment = new string('d', 60);
+        var deep = _root;
+        for (var i = 0; i < 5; i++) deep = Path.Combine(deep, $"{segment}{i}");
+
+        try
+        {
+            Directory.CreateDirectory(deep);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // The platform will not make a path this long, so there is nothing
+            // here to hold the tool to.
+            return;
+        }
+
+        Assert.True(deep.Length > 260, $"path is only {deep.Length} characters");
+
+        var fixture = new SyntheticBundle()
+            .AddTexture(64, 64, (x, y) => ((byte)x, (byte)y, (byte)0, (byte)255))
+            .Write();
+        foreach (var file in Directory.GetFiles(fixture.Directory))
+            File.Copy(file, Path.Combine(deep, Path.GetFileName(file)));
+        fixture.Dispose();
+
+        var found = BundleDiscovery.Scan(_root, out var unreadable);
+
+        Assert.Empty(unreadable);
+        var bundle = Assert.Single(found);
+        Assert.True(bundle.GpuSize > 0);
+
+        // And it can be opened and rewritten where it lies, which is the part a
+        // path limit would break well after the listing looked fine.
+        var loaded = Bundle.Load(bundle.Path);
+        using var gpu = GpuResourceFile.Open(loaded.GpuResourcePath);
+        var plan = OptimizationPlan.Build(loaded, gpu);
+        var result = BundleOptimizer.Apply(plan, gpu, loaded.Path, loaded.GpuResourcePath,
+                                           new EncodeOptions { Quality = EncodeQuality.Fast });
+
+        Assert.True(result.NewGpuSize < bundle.GpuSize);
+        Assert.True(BundleVerifier.Verify(loaded.Path).Passed);
     }
 
     [Fact]

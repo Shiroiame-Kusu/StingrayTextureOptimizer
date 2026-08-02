@@ -165,7 +165,11 @@ public sealed partial class MainWindowViewModel : ObservableObject
 
         try
         {
-            var found = await Task.Run(() => BundleDiscovery.Scan(folder));
+            var (found, unreadable) = await Task.Run(() =>
+            {
+                var bundles = BundleDiscovery.Scan(folder, out var unreachable);
+                return (bundles, unreachable);
+            });
 
             foreach (var node in ModNodeViewModel.Build(found)) Mods.Add(node);
             Track(Mods);
@@ -173,9 +177,10 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // Named even when it holds nothing, since which folder was picked is
             // the first thing to check when it turns out to hold nothing.
             ScannedFolder = folder;
-            Status = found.Count == 0
+            Status = (found.Count == 0
                 ? S.FoundNothing(folder)
-                : S.FoundMods(found.Count, Format.Bytes(found.Sum(f => f.GpuSize)));
+                : S.FoundMods(found.Count, Format.Bytes(found.Sum(f => f.GpuSize))))
+                + (unreadable.Count > 0 ? S.SomeCouldNotBeRead(unreadable.Count) : string.Empty);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException
                                       or ArgumentException)
@@ -189,6 +194,13 @@ public sealed partial class MainWindowViewModel : ObservableObject
             RefreshSelection();
         }
     }
+
+    /// <summary>
+    /// Re-reads every listed bundle's size from disk, so the panel stops
+    /// quoting what the scan measured once a write has changed it.
+    /// </summary>
+    /// <returns>How many lines turned out to have changed.</returns>
+    public int RefreshTree() => AllBundles.Count(node => node.Refresh());
 
     /// <summary>Subscribes every node in the tree, so a tick anywhere is noticed.</summary>
     private void Track(IEnumerable<ModNodeViewModel> nodes)
@@ -669,16 +681,19 @@ public sealed partial class MainWindowViewModel : ObservableObject
         }
         finally
         {
-            var written = work.Select(w => w.Bundle.Path).ToHashSet(StringComparer.Ordinal);
-
             // The panel quotes what the scan measured, so without this it goes
             // on quoting what these bundles used to cost — the one figure the
             // whole exercise was about.
-            foreach (var node in AllBundles)
-                if (written.Contains(node.Bundle!.Path)) node.Refresh();
+            //
+            // Every line, not the ones this run wrote: deciding by matching path
+            // strings is a way to miss one — a comparison that is right on Unix
+            // and wrong on a case-insensitive filesystem leaves the panel
+            // quietly stale — and a few hundred file sizes cost nothing next to
+            // the write that just happened.
+            RefreshTree();
 
             // These files are no longer the ones their plans describe.
-            foreach (var path in written) _analysed.Remove(path);
+            foreach (var path in work.Select(w => w.Bundle.Path)) _analysed.Remove(path);
 
             // Cleared while still busy, so that unticking them does not rebuild
             // the screen and write over what the run has just reported.
@@ -766,8 +781,7 @@ public sealed partial class MainWindowViewModel : ObservableObject
             // The bundle on disk has changed, so the plan no longer describes it
             // and neither does the size the scan measured for it.
             _analysed.Remove(_bundle.Path);
-            foreach (var node in AllBundles)
-                if (node.Bundle!.Path == _bundle.Path) node.Refresh();
+            RefreshTree();
 
             ClearDisplay();
             RecalculateTotals();

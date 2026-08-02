@@ -62,6 +62,23 @@ public static class BundleDiscovery
     public static IReadOnlyList<DiscoveredBundle> Scan(
         string root,
         IProgress<string>? progress = null,
+        CancellationToken cancellationToken = default) =>
+        Scan(root, out _, progress, cancellationToken);
+
+    /// <summary>
+    /// The same, reporting what it could not look at.
+    /// </summary>
+    /// <param name="unreadable">
+    /// Paths that exist and could not be read. A mod silently missing from the
+    /// list is worse than one reported as unreachable: on Windows the usual
+    /// cause is another process holding the file — the game, or a mod manager —
+    /// and a path too long for the platform lands here as well, since that is
+    /// an <see cref="IOException"/> like any other.
+    /// </param>
+    public static IReadOnlyList<DiscoveredBundle> Scan(
+        string root,
+        out IReadOnlyList<string> unreadable,
+        IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(root);
@@ -69,6 +86,7 @@ public static class BundleDiscovery
             throw new DirectoryNotFoundException($"No such directory: {root}");
 
         var found = new List<DiscoveredBundle>();
+        var unreachable = new List<string>();
         var pending = new Stack<string>();
         pending.Push(root);
 
@@ -92,6 +110,7 @@ public static class BundleDiscovery
             }
             catch (Exception e) when (e is UnauthorizedAccessException or IOException)
             {
+                unreachable.Add(directory);
                 continue;
             }
 
@@ -100,14 +119,17 @@ public static class BundleDiscovery
                 foreach (var file in Directory.EnumerateFiles(directory))
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    if (Describe(file, root) is { } bundle) found.Add(bundle);
+                    if (Describe(file, root, unreachable) is { } bundle) found.Add(bundle);
                 }
             }
             catch (Exception e) when (e is UnauthorizedAccessException or IOException)
             {
                 // Nothing readable here; the directories above still are.
+                unreachable.Add(directory);
             }
         }
+
+        unreadable = unreachable;
 
         // Ordered by where they sit rather than by size: a mod's options belong
         // next to the mod, and a list that reads like the folder tree is one you
@@ -123,8 +145,10 @@ public static class BundleDiscovery
         && !path.EndsWith(".stream", StringComparison.OrdinalIgnoreCase)
         && File.Exists(path + ".gpu_resources");
 
-    private static DiscoveredBundle? Describe(string path, string root)
+    private static DiscoveredBundle? Describe(string path, string root, List<string> unreadable)
     {
+        // Deliberately outside the try: a file with no .gpu_resources beside it
+        // is somebody else's file and not a bundle we failed to read.
         if (!LooksLikeABundle(path)) return null;
 
         try
@@ -153,6 +177,10 @@ public static class BundleDiscovery
         }
         catch (Exception e) when (e is UnauthorizedAccessException or IOException)
         {
+            // It has a .gpu_resources beside it, so it is meant to be a bundle
+            // and something stopped us reading it. Dropping it without a word
+            // would show a mod manager's folder with mods quietly missing.
+            unreadable.Add(path);
             return null;
         }
     }

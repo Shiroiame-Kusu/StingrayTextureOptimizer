@@ -555,14 +555,48 @@ public class FolderScanTests : IDisposable
         var mod = vm.Mods.Single(m => m.Name == "R-36");
         var before = mod.GpuSize;
 
+        // The property being right is not enough — the panel only redraws if it
+        // is told, and a test that reads the property passes either way.
+        var announced = new List<string>();
+        mod.PropertyChanged += (_, e) => announced.Add(e.PropertyName ?? "");
+        foreach (var bundle in mod.Bundles)
+            bundle.PropertyChanged += (_, e) => announced.Add(e.PropertyName ?? "");
+
         mod.IsChecked = true;
         await vm.AnalyseManyAsync(vm.CheckedBundles);
         await vm.OptimizeBatchAsync();
 
         Assert.True(mod.GpuSize < before, $"{mod.GpuSize} is not below {before}");
+        Assert.Contains(nameof(ModNodeViewModel.Detail), announced);
         foreach (var bundle in mod.Bundles)
             Assert.Equal(new FileInfo(bundle.Bundle!.Path + ".gpu_resources").Length,
                          bundle.GpuSize);
+    }
+
+    /// <summary>
+    /// Which lines get re-read is not decided by matching path strings: that is
+    /// a way to miss one, and a comparison that is right on Unix and wrong on a
+    /// case-insensitive filesystem leaves the panel quietly stale. Every line is
+    /// asked, and the ones that have not changed say nothing.
+    /// </summary>
+    [Fact]
+    public async Task RefreshingTheTreePicksUpAChangeToAnyBundle()
+    {
+        AddMod(folders: "Alpha");
+        AddMod(folders: "Beta");
+
+        var vm = new MainWindowViewModel();
+        await vm.ScanAsync(_root);
+
+        Assert.Equal(0, vm.RefreshTree());   // nothing has changed yet
+
+        var beta = vm.Mods.Single(m => m.Name == "Beta");
+        var gpu = beta.Bundle!.Path + ".gpu_resources";
+        File.WriteAllBytes(gpu, new byte[64]);
+
+        Assert.Equal(1, vm.RefreshTree());
+        Assert.Equal(64, beta.GpuSize);
+        Assert.Equal(0, vm.RefreshTree());   // and it settles
     }
 
     /// <summary>

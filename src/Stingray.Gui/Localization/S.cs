@@ -119,6 +119,11 @@ public static class S
         $"找到 {bundles} 个资源包，共 {total} 的 GPU 数据。点一个查看它的处理方案，"
       + "或者勾选多个一起优化。");
 
+    public static string SomeCouldNotBeRead(int count) => T(
+        $" {count} more could not be read and are not listed — something else has them open, or their "
+      + "paths are too long for this system.",
+        $" 另有 {count} 个无法读取，没有列出 —— 可能被别的程序占用，或者路径对本系统来说太长了。");
+
     public static string FoundNothing(string folder) => T(
         $"No bundles under {folder}. Point this at the folder your mod manager keeps mods in.",
         $"{folder} 下面没有找到资源包。请指向你的 mod 管理器存放 mod 的那个文件夹。");

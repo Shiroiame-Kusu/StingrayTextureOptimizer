@@ -51,6 +51,23 @@ Figures quoted here are measured on real bundles, not estimated.
     that bundle's, and the half-ticked mark is something a mod is told it is by
     its options, never something a click can ask for — a bundle, having no
     options, is never in it at all.
+  - **A bundle that cannot be read is named rather than dropped.** A folder that
+    quietly lists fewer mods than it holds sends you looking for the wrong
+    problem, and on Windows the usual cause is another process holding the file
+    — the game, or a mod manager. A path too long for the platform lands here
+    too, since that is an `IOException` like any other.
+
+### Changed
+
+- **The test suite runs on Windows as well as Linux.** Repacking renames a
+  temporary over a `.gpu_resources` that is still open for reading, which Unix
+  allows unconditionally and Windows allows only because the reader asks for
+  `FileShare.Delete`. The tests already covered it — `DeduplicationTests` calls
+  `Apply` inside the `using` that holds the reader — but the test job ran on
+  Linux alone, so the coverage existed and never ran anywhere it could fail.
+  Windows appeared in the build matrix only to publish binaries it had never run
+  a test against. Paths past Windows' 260-character limit are now covered end to
+  end as well: found, read, rewritten, verified.
 
 ## [0.1.2] — 2026-08-02
 
