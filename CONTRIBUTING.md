@@ -60,14 +60,27 @@ desktop, so they are reproducible and contain nothing but the window:
 
 ```sh
 dotnet build -c Release
-./src/Stingray.Gui/bin/Release/net10.0/stingray-tex-gui \
-    --screenshot docs/images/01-plan.png --bundle /path/to/some.patch_0
-./src/Stingray.Gui/bin/Release/net10.0/stingray-tex-gui \
-    --screenshot docs/images/02-resize.png --cap 2048 --bundle /path/to/some.patch_0
+GUI=./src/Stingray.Gui/bin/Release/net10.0/stingray-tex-gui
+
+# One bundle, on its own and with a size cap.
+$GUI --screenshot docs/images/01-plan.png   --bundle /path/to/some.patch_0
+$GUI --screenshot docs/images/02-resize.png --cap 2048 --bundle /path/to/some.patch_0
+$GUI --screenshot docs/images/03-stream.png --stream 256 --bundle /path/to/some.patch_0
+
+# A folder of mods, listed and then analysed. --tick matches on part of a mod's
+# name and may be repeated; naming them beats --analyse N, because which mods
+# have anything to save is not alphabetical and a picture of an empty grid
+# documents nothing.
+$GUI --screenshot docs/images/04-scan.png  --scan /path/to/mods
+$GUI --screenshot docs/images/05-batch.png --scan /path/to/mods \
+     --tick "Some Mod" --tick "Another Mod"
 ```
 
-Regenerate them when the UI changes. Use your own bundle: game assets must not
-be committed, and only the rendered window ends up in the PNG.
+Add `STINGRAY_LANG=zh` for the `.zh.png` pair of each.
+
+Regenerate them when the UI changes — a screenshot showing a bug that has since
+been fixed is worse than none. Use your own bundles: game assets must not be
+committed, and only the rendered window ends up in the PNG.
 
 ## Style
 

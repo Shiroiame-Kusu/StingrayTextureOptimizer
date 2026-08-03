@@ -22,6 +22,14 @@ internal static class Screenshot
     public static string? BundlePath { get; private set; }
     public static string? ScanPath { get; private set; }
     public static int AnalyseCount { get; private set; }
+
+    /// <summary>
+    /// Mods to tick, matched on part of the name. Naming them beats taking the
+    /// first few: which mods have anything to save is not alphabetical, and a
+    /// picture of an empty grid documents nothing.
+    /// </summary>
+    public static List<string> Tick { get; } = [];
+
     public static int SizeCap { get; private set; }
     public static int StreamFloor { get; private set; }
     public static bool Requested => OutputPath is not null;
@@ -45,6 +53,9 @@ internal static class Screenshot
                     break;
                 case "--analyse" when i + 1 < args.Length:
                     AnalyseCount = int.TryParse(args[++i], out var count) ? count : 0;
+                    break;
+                case "--tick" when i + 1 < args.Length:
+                    Tick.Add(args[++i]);
                     break;
                 case "--cap" when i + 1 < args.Length:
                     SizeCap = int.TryParse(args[++i], out var cap) ? cap : 0;
@@ -90,11 +101,19 @@ internal static class Screenshot
                 break;
             }
 
+            foreach (var name in Tick)
+                foreach (var mod in viewModel.Mods)
+                    if (mod.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
+                    {
+                        mod.IsChecked = true;
+                        mod.IsExpanded = true;
+                    }
+
             if (AnalyseCount > 0)
-            {
                 foreach (var mod in viewModel.Mods.Take(AnalyseCount)) mod.IsChecked = true;
+
+            if (Tick.Count > 0 || AnalyseCount > 0)
                 await viewModel.AnalyseManyAsync(viewModel.CheckedBundles);
-            }
         }
 
         if (BundlePath is not null)

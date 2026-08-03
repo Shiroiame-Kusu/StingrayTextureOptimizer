@@ -75,66 +75,66 @@ which, so you can keep that last one at full size.
 
 ## Quick start
 
-New to this? Three steps.
+Four steps, and you can accept every default on the way.
 
-**1. Download and unpack.** Grab the archive for your system from
-[Releases](../../releases) and unzip it anywhere. Nothing to install.
+### 1. Download and unpack
 
-**2. Point it at a mod.** Run `stingray-tex-gui`, click **Open bundle…**, and
-pick the bundle file — the one with **no extension** or ending in `.patch_0`,
-`.patch_1` and so on. Not the `.gpu_resources` file; that one is found
-automatically.
+Grab the archive for your system from [Releases](../../releases) and unzip it
+anywhere. Nothing to install — no .NET runtime, no dependencies. Run
+`stingray-tex-gui`.
 
-If you installed the mod rather than made it, those files are wherever your mod
-manager keeps them — one folder per mod, each holding that trio of files.
+### 2. Open the folder your mods are in
 
-**Or press Open folder… and let it find them.** Point it at the folder your mod
-manager keeps mods in and it searches everything underneath.
+Press **Open folder…** and point it at wherever your mod manager keeps mods. It
+searches everything underneath.
 
 ![Scanning a mod manager's folder](docs/images/04-scan.png)
 
-The list is the folder tree, because that is the only structure the files carry.
-A mod that ships variants keeps them in folders under itself, so *Long boi* and
-*Shorty* show up beneath the mod they belong to rather than as two unexplained
-names in a flat list. Each line carries what it costs; a mod with one bundle is
-shown as one line rather than a folder you have to open.
+Each line says what that mod costs in GPU memory, which is the number this whole
+tool is about. The list is the folder tree, because that is the only structure
+the files actually carry: a mod shipping variants keeps them in folders under
+itself, so those appear beneath the mod they belong to instead of as unexplained
+names in a flat list. A mod with a single bundle is one line, not a folder to
+open.
 
-Click a bundle to see its plan, as if you had opened it directly.
+If you built the mod yourself and want one specific file, **Open bundle…** takes
+it directly — the file with **no extension** or ending `.patch_0`, `.patch_1`
+and so on. Not the `.gpu_resources`; that is found for you.
 
-**Or tick several — ticking a mod ticks everything under it — and the button
-becomes Analyse.** Press it and every ticked bundle is analysed, with all of
-their textures shown together in one grid and a **Mod** column saying which
-bundle each row came from. The totals at the bottom right are for the whole
-selection. Only then does the button become Optimize, so a batch gets looked at
-before it is written exactly as a single bundle does, and you can still untick
-individual textures across any of them.
+### 3. Tick what you want, then press Analyse
 
-Changing a setting retires the analysis and the button offers a fresh one, since
-the plans describe the settings they were built under. Writing then backs up and
-verifies each bundle in turn, and anything that would not shrink is reported and
-left alone.
+Ticking a mod ticks everything under it, and the button counts what is still
+outstanding — **Analyse 6**, not just Analyse. Press it:
 
-Any `backup` folder is skipped, including the ones this tool writes — otherwise
-every mod you had already optimised would appear twice, once as it is and once
-as it was.
+![Six bundles from two mods, analysed together](docs/images/05-batch.png)
 
-**3. Look, then click Optimize.** The grid lists every texture that can be
-shrunk and what it will become. The bottom-right shows the total. Press
-**Optimize** when you are happy.
+Everything ticked is read into one grid. The **Mod** column names the mod on top
+and the variant underneath, because a name like *本体* means nothing on its own.
+The totals at the bottom right cover the whole selection — here **571.7 MiB →
+228.2 MiB**, a 60% cut across six bundles at once.
 
-![The plan for a bundle of uncompressed textures](docs/images/01-plan.png)
+Nothing has been written yet. Analysing only reads.
 
-Reading that: each row is one texture, **Size → New** is what it costs now and
-what it will cost after, and **Content** says what the analyser found inside it.
-Two of these turned out to be a solid colour, so they collapse from 2048² to
-16×16 — 16 MiB down to 128 bytes. The banner above the buttons reports payloads
-that appear more than once and will be stored once instead.
+### 4. Read the plan, then press Optimize
 
-Bottom right is the total: **475.1 MiB → 174.7 MiB**, and separately the GPU
-memory, which is the number to watch if you are short of VRAM.
+Each row is one texture. **Size → New** is what it costs now and after,
+**Content** is what the analyser found inside it, and the tick on the left drops
+any row you would rather leave alone.
 
-Your original files are copied to a `backup/` folder next to the bundle before
-anything is written, and the result is checked automatically afterwards.
+![One bundle on its own](docs/images/01-plan.png)
+
+That is a single bundle, which is what you get by clicking a mod instead of
+ticking it — the same grid, one source. Two of its textures turned out to be a
+single colour throughout, so they collapse from 2048² to 16×16: 16 MiB down to
+128 bytes each, and they sample identically at any size. The banner above the
+buttons reports payloads that appear more than once and will now be stored once.
+
+Bottom right is the total, **475.1 MiB → 174.7 MiB**, and beneath it the GPU
+memory separately — that is the one to watch if you are short of VRAM, since
+sharing duplicates shrinks the file without changing what the card holds.
+
+Press **Optimize**. Your originals are copied to a `backup/` folder beside the
+bundle first, and the result is verified automatically afterwards.
 
 ### What should I choose?
 
@@ -375,6 +375,32 @@ dotnet run --project src/Stingray.Gui -c Release
 Open a bundle, review the plan, override any per-texture format you disagree
 with, then Optimize. Originals are copied to a `backup/` folder next to the
 bundle before anything is written, and the result is verified automatically.
+
+#### Working on several mods at once
+
+**Backup folders are skipped when scanning**, including the ones this tool
+writes. Without that, every mod you had already optimised would be listed twice
+— once as it is and once as it was — and optimising the wrong one would destroy
+the only way back.
+
+**Analysis is kept for as long as it is valid.** Untick a mod and its rows leave
+the grid; tick it back and they return exactly as they were, including any
+individual textures you had unticked. Tick something new and only the newcomer
+is analysed. On a real folder, four bundles take 2.9 s and adding a fifth then
+costs 156 ms rather than another 2.9 s. Clicking a mod to look at it counts too,
+so ticking it afterwards is free.
+
+**Changing a setting is the one thing that retires it**, since a plan describes
+the settings it was built under. The button goes back to offering an analysis
+rather than a write.
+
+**The screen always shows what the button would do.** Opening one bundle takes a
+batch off the grid rather than leaving its totals summed against that bundle's.
+The half-ticked mark is something a mod is told it is by its variants, never
+something a click can ask for.
+
+Writing then backs up and verifies each bundle in turn. Anything that turns out
+not to shrink is counted and left alone rather than rewritten for nothing.
 
 ### CLI
 
