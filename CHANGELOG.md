@@ -14,6 +14,11 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ## [Unreleased]
 
+## [0.1.3-2] — 2026-08-03
+
+A rebuild of 0.1.3. The tool behaves identically; this is about the archives
+being recognisable, and the quick start being worth reading.
+
 ### Added
 
 - **`stingray_cmp.dll` carries a version resource** naming what it is, who wrote
@@ -31,6 +36,18 @@ Figures quoted here are measured on real bundles, not estimated.
   - This removes one signal. It is not a guarantee, and the reliable remedy is
     a false-positive submission; both READMEs now say so, and note that the
     library is optional — delete it and the managed encoder takes over.
+
+### Changed
+
+- **The quick start is four steps, one idea each**, and leads with *Open
+  folder…* rather than treating it as an aside — somebody who installed a mod
+  has a folder, not a path to a file with no extension. What used to sit inside
+  step two, which was the whole of folder mode, is now in *Use → GUI* where it
+  can be read when it is wanted.
+  - Screenshots regenerated against the shipped build. The scan one still read
+    "no bundle loaded" over a list of 213 mods, which was a bug fixed two
+    commits after it was taken. New one for analysing a batch, which was the
+    headline of 0.1.3 and had no picture at all.
 
 ## [0.1.3-1] — 2026-08-03
 
@@ -303,7 +320,8 @@ Measured on two real mods:
 | 521 MiB, already BC7 | 114.9 MiB | 303.9 MiB |
 | the same, with a 2048 cap | 54.9 MiB | 111.9 MiB |
 
-[Unreleased]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.3-1...HEAD
+[Unreleased]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.3-2...HEAD
+[0.1.3-2]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.3-1...v0.1.3-2
 [0.1.3-1]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.3...v0.1.3-1
 [0.1.3]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.1...v0.1.2
