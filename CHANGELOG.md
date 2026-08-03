@@ -14,6 +14,23 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ## [Unreleased]
 
+### Fixed
+
+- **The BC7 lookup tables are now built once per process behind `call_once`**,
+  rather than once per encode call before the workers start. The previous fix
+  removed the case that actually corrupts — several workers inside one call,
+  which is what a 4096² texture does every time — but it left the
+  initialisation unsynchronised, so what remained was a race being won on
+  timing rather than a guarantee: a second caller has to allocate and spawn
+  threads before it encodes, and that happens to outlast the table fill. Two
+  callers can encode at once, though; the test suite runs its classes in
+  parallel and nothing stops the GUI doing the same later. The single-worker
+  path skipped the warm-up entirely.
+  - Measured across 1,350 forced-simultaneous trials at one, two and four
+    workers: none corrupt, before or after. This one is a correctness argument,
+    not an observed failure — the observed one was the pre-fix build, which
+    corrupts 142 times in 150 under the same harness.
+
 ### Added
 
 - **Release archives carry GitHub build provenance**, signed during the release

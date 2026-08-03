@@ -14,6 +14,7 @@
 // CMP_Core is MIT licensed (see native/COMPRESSONATOR-LICENSE.txt).
 
 #include <cstring>
+#include <mutex>
 #include <thread>
 #include <vector>
 
@@ -115,6 +116,45 @@ void GatherChannel(const unsigned char* rgba, int width, int bx, int by,
             out[j * 4 + i] = rgba[(((size_t)by * 4 + j) * width + (size_t)bx * 4 + i) * 4 + channel];
 }
 
+// CMP_Core builds a set of global lookup tables the first time BC7 options are
+// created, behind a plain static flag that it sets to true *before* it fills
+// them, with no synchronisation of any kind:
+//
+//     if (g_rampsInitialized == TRUE) return;
+//     g_rampsInitialized = TRUE;
+//     <fills the tables>
+//
+// So the second thread to arrive is waved straight past that flag and encodes
+// against tables the first is still writing. It costs a few wrong blocks,
+// silently, depending on timing.
+//
+// Doing it once per process behind call_once is the only version of this that
+// is a guarantee rather than a bet. Building the tables before the workers
+// start would be enough for one call on its own — the second caller has to
+// allocate and spawn threads before it encodes, which in practice outlasts the
+// fill — but "in practice" is doing the work there, and two callers can encode
+// at once: the test suite runs its classes in parallel, and nothing stops the
+// GUI doing the same later. call_once makes every other thread wait for the
+// first to finish rather than hoping it already has.
+//
+// One flag per format code, since only creating options for a format triggers
+// its tables, and formats other than BC7 have none to build.
+constexpr int MaxFormatCode = 8;
+std::once_flag g_warmed[MaxFormatCode];
+bool g_warmedOk[MaxFormatCode] = {};
+
+bool WarmUp(int format, float quality, bool needsAlpha, int alphaThreshold)
+{
+    if (format < 0 || format >= MaxFormatCode) return false;
+
+    std::call_once(g_warmed[format], [&] {
+        Options warmup;
+        g_warmedOk[format] = warmup.Create(format, quality, needsAlpha, alphaThreshold);
+    });
+
+    return g_warmedOk[format];
+}
+
 bool EncodeRows(int format, const unsigned char* rgba, int width,
                 int blocksX, int firstRow, int lastRow,
                 unsigned char* out, float quality, bool needsAlpha, int alphaThreshold)
@@ -194,33 +234,14 @@ STINGRAY_EXPORT int stingray_cmp_encode(int format,
     int workers = threads < 1 ? 1 : threads;
     if (workers > blocksY) workers = blocksY;
 
+    if (!WarmUp(format, quality, needsAlpha != 0, alphaThreshold)) return -4;
+
     if (workers <= 1)
     {
         return EncodeRows(format, rgba, width, blocksX, 0, blocksY,
                           out, quality, needsAlpha != 0, alphaThreshold)
                    ? 0
                    : -4;
-    }
-
-    // CMP_Core builds a set of global lookup tables the first time BC7 options
-    // are created, behind a plain static flag that it sets to true *before* it
-    // fills them, with no synchronisation of any kind:
-    //
-    //     if (g_rampsInitialized == TRUE) return;
-    //     g_rampsInitialized = TRUE;
-    //     <fills the tables>
-    //
-    // Every worker below creates its own options, so without this the second
-    // thread to arrive is waved straight past that flag and encodes its blocks
-    // against tables the first thread is still writing. The damage is a few
-    // wrong blocks, silently, depending on timing.
-    //
-    // Build them here, on one thread, before any worker exists. Starting a
-    // thread orders everything before it, so the workers cannot see half of
-    // this.
-    {
-        Options warmup;
-        if (!warmup.Create(format, quality, needsAlpha != 0, alphaThreshold)) return -4;
     }
 
     std::vector<std::thread> pool;
