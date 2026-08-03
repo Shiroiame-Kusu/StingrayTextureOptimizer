@@ -295,6 +295,25 @@ or Dependency Walker on the files themselves:
 File entropy is about 6.5, well below the ~7.2 that indicates packing, and the
 sections are the ordinary `.text/.rdata/.data/.pdata/.rsrc/.reloc`.
 
+**What changed in 0.1.3, since 0.1.0 through 0.1.2 drew no complaints.** Only
+one thing about the Windows payload is materially different, and it is
+`stingray_cmp.dll`. Until 0.1.3 a missing export marker meant it exported
+nothing, so the linker stripped it to 60 KB of padding — entropy 1.8, a hollow
+file. Fixing that made it what it was always supposed to be: 208 KB of vector
+code, entropy 5.4, `.text` 28 times larger. So every scanner is meeting this
+library for the first time, unsigned and — until now — with no version resource
+naming it. It carries one from 0.1.4 on.
+
+**If you would rather not have it at all, delete it.** The fast encoder is
+optional: with `stingray_cmp.dll` gone the tool falls back to the managed
+encoder and everything still works, several times slower. `stingray-tex
+--version` reports which one it found. Nothing else in the archive depends on
+it.
+
+**Reporting it helps more than working around it.** MaxSecure and the other
+engines all take false-positive submissions, and a single-vendor verdict on an
+open-source tool usually clears within days once someone tells them.
+
 </details>
 
 <details>

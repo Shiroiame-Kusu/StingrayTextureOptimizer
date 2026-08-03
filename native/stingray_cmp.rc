@@ -1,0 +1,46 @@
+// SPDX-FileCopyrightText: 2026 Shiroiame-Kusu
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Version resource for the Windows build of the shim.
+//
+// Not decoration. Until 0.1.3 this library exported nothing, so the linker
+// dead-stripped it down to 60 KB of padding — entropy 1.8, essentially empty.
+// Fixing the exports made it a real 208 KB of vector code, and it arrived that
+// way with no company, no product, no description and no original filename: an
+// anonymous unsigned native DLL nobody had seen before, which is the profile
+// generic heuristics are built to distrust. Saying who it is costs nothing.
+//
+// The version tracks the C ABI that stingray_cmp_abi_version() reports, not the
+// application's: this file is loaded by name and bound by entry point, so what
+// matters about its version is what the entry points promise.
+
+#include <winver.h>
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION     1,0,0,0
+PRODUCTVERSION  1,0,0,0
+FILEFLAGSMASK   VS_FFI_FILEFLAGSMASK
+FILEFLAGS       0
+FILEOS          VOS_NT_WINDOWS32
+FILETYPE        VFT_DLL
+FILESUBTYPE     VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "CompanyName",      "Shiroiame-Kusu"
+            VALUE "FileDescription",  "Stingray Texture Optimizer block encoder (AMD Compressonator CMP_Core)"
+            VALUE "FileVersion",      "1.0.0.0"
+            VALUE "InternalName",     "stingray_cmp"
+            VALUE "LegalCopyright",   "Copyright (C) 2026 Shiroiame-Kusu. GPL-3.0-or-later; CMP_Core is MIT."
+            VALUE "OriginalFilename", "stingray_cmp.dll"
+            VALUE "ProductName",      "Stingray Texture Optimizer"
+            VALUE "ProductVersion",   "1.0.0.0"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END

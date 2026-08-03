@@ -87,6 +87,15 @@ add_library(stingray_cmp SHARED
 target_include_directories(stingray_cmp PRIVATE
   "${CORE}/shaders" "${CORE}/source" "${CMPMATH}")
 
+# Give the DLL an identity. An unsigned native library with no version resource
+# is what a dropped payload looks like, and this one only started containing
+# real code in 0.1.3 — before that a missing export marker had the linker strip
+# it to padding, so every scanner is meeting it for the first time.
+if(WIN32)
+  enable_language(RC)
+  target_sources(stingray_cmp PRIVATE stingray_cmp.rc)
+endif()
+
 if(UNIX)
   target_compile_definitions(stingray_cmp PRIVATE _LINUX ASPM_GPU)
 endif()

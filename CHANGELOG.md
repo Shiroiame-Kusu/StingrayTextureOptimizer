@@ -14,6 +14,24 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ## [Unreleased]
 
+### Added
+
+- **`stingray_cmp.dll` carries a version resource** naming what it is, who wrote
+  it and what licence it is under. An unsigned native library with no identity
+  at all is what a dropped payload looks like, and this one had none.
+  - Found by diffing the Windows payload of 0.1.1, which nothing objected to,
+    against 0.1.3, which one engine did. Exactly one thing is materially
+    different: until the export marker was fixed the DLL exported nothing, so
+    the linker stripped it to 60 KB of padding — entropy 1.8, a hollow file.
+    Fixing that made it 208 KB of vector code at entropy 5.4, with `.text` 28
+    times larger. The executables are unchanged either side of it: entropy
+    6.53–6.55 in all three releases, and `stingray-tex.exe` is the same size in
+    every one. So the flagged thing is a library every scanner is meeting for
+    the first time.
+  - This removes one signal. It is not a guarantee, and the reliable remedy is
+    a false-positive submission; both READMEs now say so, and note that the
+    library is optional — delete it and the managed encoder takes over.
+
 ## [0.1.3-1] — 2026-08-03
 
 A rebuild of 0.1.3. Nothing here changes what the tool does; it closes the
