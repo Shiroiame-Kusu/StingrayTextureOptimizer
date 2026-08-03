@@ -221,6 +221,43 @@ stingray_cmp.so        快速编码器（Linux 和 Windows）
 Skia 和 HarfBuzz 之所以仍是独立的共享库，是因为 SkiaSharp 没有提供可供静态链接的库
 文件。除此之外的一切都在可执行文件里面。
 
+#### 校验你下载到的东西
+
+每一个压缩包都带有 GitHub 构建溯源签名，在发布流程中签发，并与产出它的那个提交绑定：
+
+```
+gh attestation verify stingray-tex-<版本>-<平台>.zip \
+  --repo Shiroiame-Kusu/StingrayTextureOptimizer
+```
+
+每个压缩包的 SHA-256 校验和都写在发布说明里。
+
+<details>
+<summary>如果你的杀毒软件报警</summary>
+
+这些二进制没有签名 —— 一张代码签名证书一年要好几百，比这个工具本身花掉的成本还高。
+一个没有签名、静态链接、又刚发布因而毫无下载记录的可执行文件，正好就是通用启发式规则
+被设计来怀疑的样子，所以偶尔有单独一家引擎报“可疑/通用”是意料之中的。七十家里只有一家
+报警，这正是误报的样子；如果是 Microsoft、Kaspersky、ESET 或 BitDefender 报的，那就
+值得认真对待，也请告诉我。
+
+Windows 版二进制实际导入了什么，你可以自己用 `objdump -p` 或 Dependency Walker 在
+文件上核对：
+
+- `KERNEL32`、`ADVAPI32`、`ole32`、`OLEAUT32`、`bcrypt`，以及 C 运行时。
+- **完全没有任何网络相关的东西** —— 没有 `WS2_32`、`WININET`、`WINHTTP`、`urlmon`
+  或 `DNSAPI`。这个工具根本没有能力建立连接。
+- 没有 `CreateProcess`、`ShellExecute`、`WriteProcessMemory`、`CreateRemoteThread`
+  或 `SetWindowsHookEx`；没有任何能启动或干预其他进程的东西。
+- 没有 `RegSetValue`/`RegCreateKey`，所以也没有任何能驻留的手段。
+- 用到的密码学是 SHA-256（`BCrypt*`），用来找出逐字节相同的纹理数据以便只存一份。
+  `IsDebuggerPresent` 来自 C 运行时，几乎每个原生二进制里都有。
+
+文件熵大约是 6.5，远低于代表加壳的 7.2 左右，节表也就是普通的
+`.text/.rdata/.data/.pdata/.rsrc/.reloc`。
+
+</details>
+
 <details>
 <summary>在 Avalonia 的 <code>DataGrid</code> 存在的前提下，GUI 是如何做到 AOT 安全的</summary>
 

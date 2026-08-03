@@ -239,6 +239,10 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Both needed to sign the provenance below. id-token is what proves to
+      # the attestation service which workflow is asking.
+      id-token: write
+      attestations: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -247,14 +251,59 @@ jobs:
 
       - run: ls -la artifacts
 
+      # Signs a statement tying each archive to the commit and workflow run that
+      # produced it, verifiable with `gh attestation verify`. Worth having for a
+      # tool that ships unsigned binaries people are asked to run against their
+      # own game files: it does not stop an antivirus guessing, but it does let
+      # anyone check that what they downloaded came from this source and not
+      # from someone who reuploaded it.
+      - name: Attest what these archives were built from
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: artifacts/*
+
+      # Checksums go in the notes rather than a separate file, so they are
+      # visible on the page you download from.
+      - name: Write the release notes, with checksums
+        run: |
+          set -euo pipefail
+          cat > release-body.md <<'PREAMBLE'
+          Native AOT builds of both the command-line tool and the GUI.
+
+          Neither needs a .NET runtime installed. Unpack the archive for your
+          platform and run — everything else it needs is in there: the Skia
+          and HarfBuzz rendering libraries, and `stingray_cmp`, the fast
+          encoder, on Linux and Windows. Keep the files together.
+
+          ### Verifying what you downloaded
+
+          Every archive is signed with GitHub build provenance, which ties it to
+          the exact commit and workflow run that produced it:
+
+          ```
+          gh attestation verify <archive> --repo Shiroiame-Kusu/StingrayTextureOptimizer
+          ```
+
+          A note on antivirus: these binaries are unsigned, because a code
+          signing certificate costs more per year than this free tool has ever
+          cost to make. An unsigned, statically linked, freshly published
+          executable is what generic heuristics are built to be suspicious of,
+          so the occasional single-vendor "suspicious/generic" hit is expected.
+          The binaries import no networking API at all — no sockets, no HTTP, no
+          DNS — and cannot write to the registry or start another process. The
+          cryptography they do import is SHA-256, used to find textures that are
+          byte-identical so they can be stored once.
+
+          ### Checksums (SHA-256)
+
+          ```
+          PREAMBLE
+          (cd artifacts && sha256sum *) >> release-body.md
+          echo '```' >> release-body.md
+          cat release-body.md
+
       - uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*
           generate_release_notes: true
-          body: |
-            Native AOT builds of both the command-line tool and the GUI.
-
-            Neither needs a .NET runtime installed. Unpack the archive for your
-            platform and run — everything else it needs is in there: the Skia
-            and HarfBuzz rendering libraries, and `stingray_cmp`, the fast
-            encoder, on Linux and Windows. Keep the files together.
+          body_path: release-body.md

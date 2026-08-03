@@ -256,6 +256,47 @@ millisecond.
 Skia and HarfBuzz stay as separate shared libraries because SkiaSharp ships no
 static archive to link against. Everything else is inside the executables.
 
+#### Checking what you downloaded
+
+Every archive carries GitHub build provenance, signed during the release run and
+tied to the commit that produced it:
+
+```
+gh attestation verify stingray-tex-<version>-<platform>.zip \
+  --repo Shiroiame-Kusu/StingrayTextureOptimizer
+```
+
+SHA-256 sums for each archive are in the release notes.
+
+<details>
+<summary>If your antivirus objects</summary>
+
+The binaries are unsigned — a code signing certificate costs several hundred a
+year, which is more than this tool has ever cost to make. An unsigned,
+statically linked executable with no download history is exactly the shape
+generic heuristics are built to distrust, so an occasional single-vendor
+"suspicious/generic" verdict is expected. A hit from one engine out of seventy
+is what a false positive looks like; a hit from Microsoft, Kaspersky, ESET or
+BitDefender would be worth taking seriously, and I would want to hear about it.
+
+What the Windows binaries actually import, which is checkable with `objdump -p`
+or Dependency Walker on the files themselves:
+
+- `KERNEL32`, `ADVAPI32`, `ole32`, `OLEAUT32`, `bcrypt`, and the C runtime.
+- **No networking of any kind** — no `WS2_32`, `WININET`, `WINHTTP`, `urlmon` or
+  `DNSAPI`. The tool cannot open a connection.
+- No `CreateProcess`, `ShellExecute`, `WriteProcessMemory`, `CreateRemoteThread`
+  or `SetWindowsHookEx`; nothing that starts or touches another process.
+- No `RegSetValue`/`RegCreateKey`, so nothing that could persist.
+- The cryptography is SHA-256 (`BCrypt*`), used to find byte-identical texture
+  payloads so they can be stored once. `IsDebuggerPresent` comes from the C
+  runtime and appears in essentially every native binary.
+
+File entropy is about 6.5, well below the ~7.2 that indicates packing, and the
+sections are the ordinary `.text/.rdata/.data/.pdata/.rsrc/.reloc`.
+
+</details>
+
 <details>
 <summary>How the GUI is AOT-safe despite Avalonia's <code>DataGrid</code></summary>
 

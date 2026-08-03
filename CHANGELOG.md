@@ -14,6 +14,20 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ## [Unreleased]
 
+### Added
+
+- **Release archives carry GitHub build provenance**, signed during the release
+  run and tied to the commit that produced it, so anyone can check that what
+  they downloaded came from this source rather than from someone who reuploaded
+  it: `gh attestation verify <archive> --repo Shiroiame-Kusu/StingrayTextureOptimizer`.
+  SHA-256 sums for every archive go in the release notes.
+  - Prompted by an antivirus flagging the Windows build as
+    `Trojan.Malware.300983.susgen` — a generic heuristic verdict from one engine.
+    Provenance does not stop a scanner guessing, but it does answer the question
+    the guess raises. Both READMEs now record what the binaries import: no
+    networking API of any kind, nothing that starts a process, nothing that
+    writes to the registry, and SHA-256 for finding byte-identical payloads.
+
 ## [0.1.3] — 2026-08-03
 
 Optimising a whole mod folder at once, and three ways the encoder was wrong that
