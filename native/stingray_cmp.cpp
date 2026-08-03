@@ -19,6 +19,16 @@
 
 #include "cmp_core.h"
 
+// An ELF shared object exports every non-static symbol without being asked; a
+// Windows DLL exports nothing at all unless each one says so. Without this the
+// library builds and loads on Windows and has no entry points in it, which is
+// what the loader then reports.
+#if defined(_WIN32)
+#  define STINGRAY_EXPORT __declspec(dllexport)
+#else
+#  define STINGRAY_EXPORT __attribute__((visibility("default")))
+#endif
+
 namespace
 {
 constexpr int FormatBc1 = 1;
@@ -159,14 +169,14 @@ extern "C" {
 
 /// Bumped when the ABI below changes, so a stale native library is detected
 /// rather than silently misused.
-int stingray_cmp_abi_version(void)
+STINGRAY_EXPORT int stingray_cmp_abi_version(void)
 {
     return 1;
 }
 
 /// Encodes a straight-RGBA surface. Dimensions must be multiples of 4.
 /// Returns 0 on success, negative on failure.
-int stingray_cmp_encode(int format,
+STINGRAY_EXPORT int stingray_cmp_encode(int format,
                         const unsigned char* rgba, int width, int height,
                         unsigned char* out, unsigned long long outSize,
                         float quality, int threads,

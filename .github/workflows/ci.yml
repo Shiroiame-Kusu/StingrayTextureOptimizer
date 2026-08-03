@@ -195,6 +195,25 @@ jobs:
           echo "STAGE=$stage" >> "$GITHUB_ENV"
           ls -la "$stage"
 
+      # Building the shim and shipping it does not mean it loads. It builds
+      # cleanly on Windows while exporting nothing at all unless every entry
+      # point is marked, and nothing before this ever asked the artifact whether
+      # it had found one — the tests skip the fast encoder when it is absent, so
+      # they pass either way. Ask the binary we are about to publish.
+      - name: The bundled encoder is the one it says it is
+        if: runner.os != 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+          cli="$STAGE/stingray-tex"
+          [ -f "$cli.exe" ] && cli="$cli.exe"
+          reported=$("$cli" --version | grep '^encoder:')
+          echo "$reported"
+          case "$reported" in
+            *Compressonator*) ;;
+            *) echo "::error::shipped a native shim this build cannot use: $reported"; exit 1 ;;
+          esac
+
       - name: Archive (tar.gz)
         if: matrix.archive == 'tar'
         run: tar -czf "$STAGE.tar.gz" "$STAGE"

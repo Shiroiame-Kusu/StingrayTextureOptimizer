@@ -16,6 +16,11 @@ internal static class Program
         if (args.Length > 0 && args[0] is "--version" or "-V")
         {
             Console.WriteLine(BuildInfo.ProductAndVersion);
+
+            // Which encoder a build ended up with is the first thing worth
+            // knowing when it is slower than expected or a report comes in, and
+            // asking here needs no bundle to open.
+            Console.WriteLine($"encoder: {TextureEncoder.BackendStatus}");
             return 0;
         }
 
@@ -300,7 +305,7 @@ internal static class Program
                               detail cost per texture before you commit.
           --dry-run           analyse and report without writing
           --original <path>   for verify: the pre-optimisation bundle to compare against
-          --version           print the version and exit
+          --version           print the version and which encoder is in use, then exit
 
         EXAMPLES
           stingray-tex analyze  mymod.patch_0
