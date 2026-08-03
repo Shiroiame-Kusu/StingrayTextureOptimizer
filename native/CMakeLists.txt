@@ -46,6 +46,15 @@ foreach(required
   endif()
 endforeach()
 
+# Not ASPM_GPU. That macro switches CMP_Core's kernels to their GPU-shader
+# bodies, and it used to be defined here, which read as though this built
+# something GPU-accelerated. It did not: common_def.h undefines it on every
+# Unix, and it was never set on Windows, so both platforms always compiled the
+# CPU path. Removing it leaves the library byte-for-byte identical, which is how
+# that was established. Real GPU encoding lives in Compressonator's plugin layer
+# — DirectX, OpenCL or hardware backends — not in cmp_core, and none of it is
+# reachable from these two directories.
+#
 # Each SIMD kernel is compiled for its own instruction set and selected at run
 # time by cpu_extensions.cpp. That dispatch is what Compressonator's CLI calls
 # its "HPC" path.
@@ -56,7 +65,7 @@ add_library(cmp_simd_avx512 STATIC "${CORE}/source/core_simd_avx512.cpp")
 foreach(t cmp_simd_sse cmp_simd_avx cmp_simd_avx512)
   target_include_directories(${t} PRIVATE "${CORE}/source" "${CORE}/shaders")
   if(UNIX)
-    target_compile_definitions(${t} PRIVATE _LINUX ASPM_GPU)
+    target_compile_definitions(${t} PRIVATE _LINUX)
   endif()
 endforeach()
 
@@ -97,7 +106,7 @@ if(WIN32)
 endif()
 
 if(UNIX)
-  target_compile_definitions(stingray_cmp PRIVATE _LINUX ASPM_GPU)
+  target_compile_definitions(stingray_cmp PRIVATE _LINUX)
 endif()
 
 target_link_libraries(stingray_cmp PRIVATE cmp_simd_sse cmp_simd_avx cmp_simd_avx512)
