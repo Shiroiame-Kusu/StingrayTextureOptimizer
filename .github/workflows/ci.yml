@@ -151,6 +151,19 @@ jobs:
       # windowing backend, theme and Skia at run time, and a trimming mistake
       # shows up there rather than at compile time. Render the window offscreen
       # and require a non-empty PNG back.
+      # The same question on Windows, where nothing had ever started the GUI:
+      # the tests cover the core and the CLI is exercised by the encoder check
+      # above, but a trimmed AOT window that fails to resolve its backend would
+      # have shipped unnoticed.
+      - name: Smoke-test the AOT GUI (Windows)
+        if: matrix.rid == 'win-x64'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ./out/gui/stingray-tex-gui.exe --screenshot smoke.png
+          test -s smoke.png
+          echo "rendered $(stat -c%s smoke.png) bytes"
+
       - name: Smoke-test the AOT GUI
         if: matrix.rid == 'linux-x64'
         run: |
