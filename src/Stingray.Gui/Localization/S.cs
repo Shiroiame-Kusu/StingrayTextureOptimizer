@@ -30,11 +30,12 @@ public static class S
     public static string OpenFolder => T("Open folder…", "打开文件夹…");
     public static string OpenFolderHint => T(
         "Scan a folder for mods, so you can look through them without hunting for bundle files." + Nl
-      + "Point it at your mod manager's folder: everything under it is searched, one entry per bundle, "
-      + "largest first." + Nl
+      + "Point it at your mod manager's folder: everything under it is searched and listed the way it "
+      + "sits on disk, so a mod's options stay under the mod." + Nl
       + "Any backup folder is skipped, including the ones this tool writes.",
         "扫描一个文件夹里的 mod，这样就不用自己去翻资源包文件了。" + Nl
-      + "指向你的 mod 管理器所在的文件夹即可：它下面的所有内容都会被搜索，每个资源包一行，大的排在前面。" + Nl
+      + "指向你的 mod 管理器所在的文件夹即可：它下面的所有内容都会被搜索，并按照它们在硬盘上的结构列出来，"
+      + "所以一个 mod 的各个选项会留在这个 mod 下面。" + Nl
       + "所有 backup 文件夹都会被跳过，包括这个工具自己写出来的那些。");
 
     public static string PickAFolder => T("Choose a folder to scan for mods", "选择要扫描 mod 的文件夹");
