@@ -14,6 +14,12 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ## [Unreleased]
 
+## [0.1.3-1] — 2026-08-03
+
+A rebuild of 0.1.3. Nothing here changes what the tool does; it closes the
+remaining half of the encoder race by construction rather than by timing, and
+makes the archives checkable.
+
 ### Fixed
 
 - **The BC7 lookup tables are now built once per process behind `call_once`**,
@@ -279,7 +285,8 @@ Measured on two real mods:
 | 521 MiB, already BC7 | 114.9 MiB | 303.9 MiB |
 | the same, with a 2048 cap | 54.9 MiB | 111.9 MiB |
 
-[Unreleased]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.3-1...HEAD
+[0.1.3-1]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.3...v0.1.3-1
 [0.1.3]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/Shiroiame-Kusu/StingrayTextureOptimizer/compare/v0.1.0...v0.1.1
