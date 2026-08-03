@@ -268,6 +268,16 @@ public static class BundleOptimizer
         // 5. Commit. Each rename is atomic but the set is not, so the stream file
         //    lands before the table that points into it: a bundle referring to
         //    stream data that is already there is recoverable, the reverse is not.
+        //
+        //    The source is let go of first. Windows will not rename over a file
+        //    while any handle to it is open, whatever sharing mode the reader
+        //    asked for, so an in-place rewrite fails at exactly this point with
+        //    "access denied". Every read from it is finished by now — the
+        //    payloads were copied in step 2 and the stream file in step 3 — and
+        //    the caller's own `using` is unaffected, since closing twice is
+        //    nothing.
+        sourceGpu.Close();
+
         var bundleTemp = outputBundlePath + ".tmp";
         File.WriteAllBytes(bundleTemp, image);
         if (streamTemp is not null) File.Move(streamTemp, streamPath, overwrite: true);

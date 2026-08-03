@@ -25,16 +25,28 @@ public sealed class GpuResourceFile : IDisposable
 
     public static GpuResourceFile Open(string path)
     {
-        // FileShare.Delete matters on Windows: repacking writes a temporary file
-        // and renames it over this one, and the source is still open for reading
-        // while that happens. Without it the rename fails with a sharing
-        // violation and an in-place optimise cannot finish. It costs nothing on
-        // Unix, where a rename over an open file already works.
+        // FileShare.Delete lets the file be unlinked while this handle is open,
+        // which is what a mod manager or the game moving it out from under a
+        // scan needs. It is NOT enough to rename over the file: Windows refuses
+        // that with "access denied" while any handle is open, whatever sharing
+        // was asked for. Replacing one is <see cref="Close"/>'s job.
         var stream = new FileStream(path, FileMode.Open, FileAccess.Read,
                                     FileShare.Read | FileShare.Delete,
                                     bufferSize: 1 << 20, FileOptions.RandomAccess);
         return new GpuResourceFile(path, stream);
     }
+
+    /// <summary>
+    /// Lets go of the file, which anything replacing it in place has to do
+    /// first.
+    /// </summary>
+    /// <remarks>
+    /// Unix renames over an open file happily, so this was invisible until the
+    /// tests ran on Windows, where every in-place rewrite failed at the commit.
+    /// Idempotent, so a caller's <c>using</c> stays correct after this has
+    /// already been called on its behalf.
+    /// </remarks>
+    public void Close() => _stream.Dispose();
 
     public byte[] Read(ulong offset, uint size)
     {
@@ -91,5 +103,5 @@ public sealed class GpuResourceFile : IDisposable
         }
     }
 
-    public void Dispose() => _stream.Dispose();
+    public void Dispose() => Close();
 }

@@ -14,6 +14,58 @@ public class OptimizationRoundTripTests
     private static readonly EncodeOptions Fast =
         new() { Quality = EncodeQuality.Fast, ThreadCount = 2 };
 
+    /// <summary>
+    /// Applying a plan lets go of the file it read from, because Windows will
+    /// not rename over a file while any handle to it is open — whatever sharing
+    /// mode the reader asked for.
+    /// </summary>
+    /// <remarks>
+    /// Asserted on the handle rather than on the rewrite succeeding, because a
+    /// rewrite succeeds on Unix either way: this is the one thing about it that
+    /// a Linux run can actually check. Windows checks the rest by failing.
+    /// </remarks>
+    [Fact]
+    public void TheSourceIsLetGoOfBeforeItIsReplaced()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddTexture(64, 64, (x, y) => ((byte)x, (byte)y, (byte)(x ^ y), 255))
+            .Write();
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+        var plan = OptimizationPlan.Build(bundle, gpu);
+
+        Assert.Equal(4, gpu.Read(0, 4).Length);   // open to begin with
+
+        BundleOptimizer.Apply(plan, gpu, bundle.Path, bundle.GpuResourcePath, Fast);
+
+        Assert.Throws<ObjectDisposedException>(() => gpu.Read(0, 4));
+    }
+
+    /// <summary>Writing elsewhere replaces nothing, and lets go just the same.</summary>
+    [Fact]
+    public void WritingToAnOutputPathStillFinishesWithTheSourceClosed()
+    {
+        using var fixture = new SyntheticBundle()
+            .AddTexture(64, 64, (x, y) => ((byte)x, (byte)y, (byte)(x ^ y), 255))
+            .Write();
+
+        var elsewhere = Path.Combine(fixture.Directory, "out");
+        Directory.CreateDirectory(elsewhere);
+        var outputBundle = Path.Combine(elsewhere, Path.GetFileName(fixture.BundlePath));
+
+        var bundle = Bundle.Load(fixture.BundlePath);
+        using var gpu = GpuResourceFile.Open(bundle.GpuResourcePath);
+        var plan = OptimizationPlan.Build(bundle, gpu);
+
+        BundleOptimizer.Apply(plan, gpu, outputBundle, outputBundle + ".gpu_resources", Fast,
+                              outputStreamPath: outputBundle + ".stream");
+
+        Assert.True(new FileInfo(outputBundle + ".gpu_resources").Length > 0);
+        Assert.True(BundleVerifier.Verify(outputBundle).Passed);
+        Assert.Throws<ObjectDisposedException>(() => gpu.Read(0, 4));
+    }
+
     [Fact]
     public void ShrinksBundleAndPassesVerification()
     {

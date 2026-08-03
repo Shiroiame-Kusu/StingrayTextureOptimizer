@@ -57,17 +57,30 @@ Figures quoted here are measured on real bundles, not estimated.
     — the game, or a mod manager. A path too long for the platform lands here
     too, since that is an `IOException` like any other.
 
+### Fixed
+
+- **Rewriting a bundle in place failed on Windows**, every time, with "access
+  denied" at the moment of commit. Windows will not rename over a file while any
+  handle to it is open, and the repack reads its payloads from the very file it
+  then replaces. `FileShare.Delete` was believed to cover this and does not —
+  it permits unlinking, not replacing. The source is now closed before the
+  commit, where every read from it is long finished.
+
+  This shipped in 0.1.0. The tool has never been able to optimise a bundle on
+  Windows.
+
 ### Changed
 
-- **The test suite runs on Windows as well as Linux.** Repacking renames a
-  temporary over a `.gpu_resources` that is still open for reading, which Unix
-  allows unconditionally and Windows allows only because the reader asks for
-  `FileShare.Delete`. The tests already covered it — `DeduplicationTests` calls
-  `Apply` inside the `using` that holds the reader — but the test job ran on
-  Linux alone, so the coverage existed and never ran anywhere it could fail.
-  Windows appeared in the build matrix only to publish binaries it had never run
-  a test against. Paths past Windows' 260-character limit are now covered end to
-  end as well: found, read, rewritten, verified.
+- **The test suite runs on Windows as well as Linux**, which is what caught the
+  above: 60 tests failed on the first run, all of them the same line. The
+  coverage had existed since 0.1.0 — `DeduplicationTests` calls `Apply` inside
+  the `using` that holds the reader — but the test job ran on Linux alone, where
+  a rename over an open file always works, so it could not fail. Windows
+  appeared in the build matrix only to publish binaries it had never run a test
+  against.
+  - Paths past Windows' 260-character limit are covered end to end as well:
+    found, read, rewritten, verified. They turned out to be fine — that test
+    failed on the rename like all the others, not on the length.
 
 ## [0.1.2] — 2026-08-02
 
