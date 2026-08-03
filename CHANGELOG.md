@@ -14,47 +14,10 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ## [Unreleased]
 
-### Fixed
-
-- **The first BC7 texture of every run was encoded wrong** whenever the fast
-  encoder ran on more than one thread, which is the default. CMP_Core builds a
-  set of global lookup tables the first time BC7 options are created, behind a
-  static flag it sets to true *before* filling them and with no synchronisation;
-  the shim created options inside each worker, so every thread after the first
-  was waved past that flag and encoded its blocks against tables still being
-  written. The tables are now built once, on one thread, before any worker
-  starts.
-  - Measured on a 32×32 surface, first encode in a fresh process, 300 runs per
-    configuration: at 2 threads 142 runs came out wrong, at 4 threads 294, at 8
-    threads all 300 — around half the blocks in each. After the fix, none of 900.
-  - Only the first texture in a run was affected: once the tables are built, the
-    flag does what it looks like it does. The result was structurally valid, so
-    verification passed it — the damage is wrong pixels in one texture, not a
-    broken bundle.
-  - This is why `--threads 1` would have produced different output from the
-    default. It shipped in 0.1.0, wherever the fast encoder was available.
-- **The fast encoder never worked on Windows.** The native shim built, shipped
-  and loaded there with no entry points in it at all: a Windows DLL exports
-  nothing unless each function says so, while an ELF shared object exports
-  everything by default, so marking them was never needed until the shim reached
-  Windows. Every Windows build has quietly fallen back to the managed encoder,
-  which is several times slower — `Encoder: BCnEncoder.Net (native shim is
-  missing an expected entry point)` in the corner of the window.
-  - CI now asks the binary it is about to publish which encoder it found, and
-    fails the build if a shim was bundled that the build cannot use. Nothing
-    checked before: the tests skip the fast encoder when it is absent, so they
-    passed either way.
-
-### Added
-
-- `--version` also reports which encoder is in use, which is the first thing
-  worth knowing when a build is slower than expected, and needs no bundle to
-  ask.
-
 ## [0.1.3] — 2026-08-03
 
-Optimising a whole mod folder at once — and the discovery that none of this
-ever worked on Windows.
+Optimising a whole mod folder at once, and three ways the encoder was wrong that
+only running the tests on Windows was ever going to find.
 
 ### Added
 
@@ -98,6 +61,9 @@ ever worked on Windows.
     problem, and on Windows the usual cause is another process holding the file
     — the game, or a mod manager. A path too long for the platform lands here
     too, since that is an `IOException` like any other.
+- `--version` also reports which encoder is in use, which is the first thing
+  worth knowing when a build is slower than expected, and needs no bundle to
+  ask.
 
 ### Fixed
 
@@ -110,6 +76,34 @@ ever worked on Windows.
 
   This shipped in 0.1.0. The tool has never been able to optimise a bundle on
   Windows.
+- **The first BC7 texture of every run was encoded wrong** whenever the fast
+  encoder ran on more than one thread, which is the default. CMP_Core builds a
+  set of global lookup tables the first time BC7 options are created, behind a
+  static flag it sets to true *before* filling them and with no synchronisation;
+  the shim created options inside each worker, so every thread after the first
+  was waved past that flag and encoded its blocks against tables still being
+  written. The tables are now built once, on one thread, before any worker
+  starts.
+  - Measured on a 32×32 surface, first encode in a fresh process, 300 runs per
+    configuration: at 2 threads 142 runs came out wrong, at 4 threads 294, at 8
+    threads all 300 — around half the blocks in each. After the fix, none of 900.
+  - Only the first texture in a run was affected: once the tables are built, the
+    flag does what it looks like it does. The result was structurally valid, so
+    verification passed it — the damage is wrong pixels in one texture, not a
+    broken bundle.
+  - This is why `--threads 1` would have produced different output from the
+    default. It shipped in 0.1.0, wherever the fast encoder was available.
+- **The fast encoder never worked on Windows.** The native shim built, shipped
+  and loaded there with no entry points in it at all: a Windows DLL exports
+  nothing unless each function says so, while an ELF shared object exports
+  everything by default, so marking them was never needed until the shim reached
+  Windows. Every Windows build has quietly fallen back to the managed encoder,
+  which is several times slower — `Encoder: BCnEncoder.Net (native shim is
+  missing an expected entry point)` in the corner of the window.
+  - CI now asks the binary it is about to publish which encoder it found, and
+    fails the build if a shim was bundled that the build cannot use. Nothing
+    checked before: the tests skip the fast encoder when it is absent, so they
+    passed either way.
 
 ### Changed
 
