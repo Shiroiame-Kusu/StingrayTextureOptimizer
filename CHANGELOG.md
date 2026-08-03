@@ -16,6 +16,23 @@ Figures quoted here are measured on real bundles, not estimated.
 
 ### Fixed
 
+- **The first BC7 texture of every run was encoded wrong** whenever the fast
+  encoder ran on more than one thread, which is the default. CMP_Core builds a
+  set of global lookup tables the first time BC7 options are created, behind a
+  static flag it sets to true *before* filling them and with no synchronisation;
+  the shim created options inside each worker, so every thread after the first
+  was waved past that flag and encoded its blocks against tables still being
+  written. The tables are now built once, on one thread, before any worker
+  starts.
+  - Measured on a 32×32 surface, first encode in a fresh process, 300 runs per
+    configuration: at 2 threads 142 runs came out wrong, at 4 threads 294, at 8
+    threads all 300 — around half the blocks in each. After the fix, none of 900.
+  - Only the first texture in a run was affected: once the tables are built, the
+    flag does what it looks like it does. The result was structurally valid, so
+    verification passed it — the damage is wrong pixels in one texture, not a
+    broken bundle.
+  - This is why `--threads 1` would have produced different output from the
+    default. It shipped in 0.1.0, wherever the fast encoder was available.
 - **The fast encoder never worked on Windows.** The native shim built, shipped
   and loaded there with no entry points in it at all: a Windows DLL exports
   nothing unless each function says so, while an ELF shared object exports

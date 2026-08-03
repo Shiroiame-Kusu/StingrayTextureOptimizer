@@ -202,6 +202,27 @@ STINGRAY_EXPORT int stingray_cmp_encode(int format,
                    : -4;
     }
 
+    // CMP_Core builds a set of global lookup tables the first time BC7 options
+    // are created, behind a plain static flag that it sets to true *before* it
+    // fills them, with no synchronisation of any kind:
+    //
+    //     if (g_rampsInitialized == TRUE) return;
+    //     g_rampsInitialized = TRUE;
+    //     <fills the tables>
+    //
+    // Every worker below creates its own options, so without this the second
+    // thread to arrive is waved straight past that flag and encodes its blocks
+    // against tables the first thread is still writing. The damage is a few
+    // wrong blocks, silently, depending on timing.
+    //
+    // Build them here, on one thread, before any worker exists. Starting a
+    // thread orders everything before it, so the workers cannot see half of
+    // this.
+    {
+        Options warmup;
+        if (!warmup.Create(format, quality, needsAlpha != 0, alphaThreshold)) return -4;
+    }
+
     std::vector<std::thread> pool;
     std::vector<char> ok((size_t)workers, 1);
     const int rowsPer = (blocksY + workers - 1) / workers;
